@@ -1,0 +1,26 @@
+{
+  "name": "payment-services",
+  "version": "1.0.0",
+  "description": "Payment services API using Express, Sequelize and PostgreSQL",
+  "main": "src/app.js",
+  "scripts": {
+    "dev": "nodemon src/app.js",
+    "start": "node src/app.js",
+    "lint": "standard"
+  },
+  "keywords": ["payments", "api", "express", "sequelize"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.0.0-beta.1",
+    "dotenv": "^16.3.1",
+    "sequelize": "^7.0.0-alpha.31",
+    "pg": "^8.11.3",
+    "winston": "^3.11.0",
+    "morgan": "^1.10.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2",
+    "standard": "^17.1.0"
+  }
+}
