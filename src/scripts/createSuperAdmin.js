@@ -1,17 +1,25 @@
 const { Admin } = require('../models/admin.model')
 const logger = require('../config/logger')
+require('dotenv').config()
 
 async function createSuperAdmin() {
   try {
+    const superAdminEmail = process.env.SUPER_ADMIN_EMAIL
+    const superAdminPassword = process.env.SUPER_ADMIN_PASSWORD
+
+    if (!superAdminEmail || !superAdminPassword) {
+      throw new Error('Las variables de entorno SUPER_ADMIN_EMAIL y SUPER_ADMIN_PASSWORD son requeridas')
+    }
+
     const superAdmin = await Admin.findOne({
-      where: { email: 'superadmin@example.com' }
+      where: { email: superAdminEmail }
     })
 
     if (!superAdmin) {
       await Admin.create({
         name: 'Super Admin',
-        email: 'superadmin@innovatelearning.com.co',
-        passwordHash: 'Innovate@202025',
+        email: superAdminEmail,
+        passwordHash: superAdminPassword,
         role: 'SUPER_ADMIN',
         isActive: true
       })
