@@ -38,6 +38,14 @@ const Product = sequelize.define('Product', {
       min: 0
     }
   },
+  currency: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    defaultValue: 'USD',
+    validate: {
+      isIn: [['USD', 'EUR', 'COP', 'MXN']] // Monedas soportadas
+    }
+  },
   provider: {
     type: DataTypes.STRING
   },

@@ -21,6 +21,7 @@ Obtiene la lista de productos activos.
       "name": "string",
       "productRef": "string",
       "price": "number",
+      "currency": "string",
       "description": "string",
       "features": "string",
       "image": "string",
@@ -48,6 +49,7 @@ Obtiene un producto específico por su ID.
     "name": "string",
     "productRef": "string",
     "price": "number",
+    "currency": "string",
     "description": "string",
     "features": "string",
     "image": "string",
@@ -74,6 +76,7 @@ Obtiene un producto específico por su referencia.
     "name": "string",
     "productRef": "string",
     "price": "number",
+    "currency": "string",
     "description": "string",
     "features": "string",
     "image": "string",
@@ -101,6 +104,7 @@ Obtiene la lista completa de productos, incluyendo los inactivos. Requiere rol R
       "name": "string",
       "productRef": "string",
       "price": "number",
+      "currency": "string",
       "description": "string",
       "features": "string",
       "image": "string",
@@ -125,6 +129,7 @@ Crea un nuevo producto. Requiere rol EDITOR.
   "name": "string",
   "productRef": "string",
   "price": "number",
+  "currency": "string",
   "description": "string",
   "features": "string",
   "image": "string",
@@ -141,6 +146,7 @@ Crea un nuevo producto. Requiere rol EDITOR.
     "name": "string",
     "productRef": "string",
     "price": "number",
+    "currency": "string",
     "description": "string",
     "features": "string",
     "image": "string",
@@ -164,6 +170,7 @@ Actualiza un producto existente. Requiere rol EDITOR.
   "name": "string",
   "productRef": "string",
   "price": "number",
+  "currency": "string",
   "description": "string",
   "features": "string",
   "image": "string",
@@ -180,6 +187,7 @@ Actualiza un producto existente. Requiere rol EDITOR.
     "name": "string",
     "productRef": "string",
     "price": "number",
+    "currency": "string",
     "description": "string",
     "features": "string",
     "image": "string",
@@ -209,6 +217,7 @@ Elimina un producto. Requiere rol SUPER_ADMIN.
 - `name`: String, requerido
 - `productRef`: String, requerido
 - `price`: Número entero, mayor a 0
+- `currency`: String, requerido, debe ser uno de: "USD", "EUR", "COP", "MXN"
 - `description`: String, opcional
 - `features`: String, opcional
 - `image`: URL válida, opcional
