@@ -14,7 +14,8 @@ const productValidations = [
   body('description').optional().isString(),
   body('features').optional().isString(),
   body('image').optional().isURL().withMessage('La imagen debe ser una URL válida'),
-  body('provider').optional().isString()
+  body('provider').optional().isString(),
+  body('license_type').optional().isBoolean().withMessage('El tipo de licencia debe ser un valor booleano')
 ]
 
 // Rutas públicas

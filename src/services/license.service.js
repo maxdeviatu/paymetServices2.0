@@ -1,4 +1,4 @@
-const { License } = require('../models')
+const { License, Product } = require('../models')
 const { sequelize } = require('../models')
 const logger = require('../config/logger')
 
@@ -11,6 +11,19 @@ async function create(data) {
       productRef: data.productRef,
       licenseKey: data.licenseKey
     })
+
+    // Verify that the product exists and supports licenses
+    const product = await Product.findOne({
+      where: { productRef: data.productRef }
+    })
+
+    if (!product) {
+      throw new Error(`Product with reference ${data.productRef} not found`)
+    }
+
+    if (!product.license_type) {
+      throw new Error(`Product ${data.productRef} does not support licenses. Set license_type to true first.`)
+    }
 
     const license = await License.create(data)
 
@@ -162,6 +175,30 @@ async function bulkImport(rows) {
     logger.logBusiness('bulkImportLicenses', {
       totalRows: rows.length
     })
+
+    // Get unique product references from the CSV
+    const uniqueProductRefs = [...new Set(rows.map(row => row.productRef))]
+    
+    // Verify all products exist and support licenses
+    const products = await Product.findAll({
+      where: { productRef: uniqueProductRefs },
+      attributes: ['productRef', 'license_type']
+    })
+
+    // Check for missing products
+    const foundProductRefs = products.map(p => p.productRef)
+    const missingProductRefs = uniqueProductRefs.filter(ref => !foundProductRefs.includes(ref))
+    
+    if (missingProductRefs.length > 0) {
+      throw new Error(`Products not found: ${missingProductRefs.join(', ')}`)
+    }
+
+    // Check for products that don't support licenses
+    const nonLicenseProducts = products.filter(p => !p.license_type).map(p => p.productRef)
+    
+    if (nonLicenseProducts.length > 0) {
+      throw new Error(`Products do not support licenses: ${nonLicenseProducts.join(', ')}. Set license_type to true first.`)
+    }
 
     const result = await License.bulkCreate(rows, {
       ignoreDuplicates: true

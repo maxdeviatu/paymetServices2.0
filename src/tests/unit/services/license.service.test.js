@@ -1,5 +1,5 @@
 const licenseService = require('../../../services/license.service')
-const { License, sequelize } = require('../../../models')
+const { License, Product, sequelize } = require('../../../models')
 
 // Mock de las dependencias
 jest.mock('../../../models', () => ({
@@ -9,6 +9,10 @@ jest.mock('../../../models', () => ({
     findOne: jest.fn(),
     findAll: jest.fn(),
     bulkCreate: jest.fn()
+  },
+  Product: {
+    findOne: jest.fn(),
+    findAll: jest.fn()
   },
   sequelize: {
     transaction: jest.fn()
@@ -40,18 +44,53 @@ describe('LicenseService', () => {
 
     it('should create a new license successfully', async () => {
       // Configurar mocks
+      const mockProduct = {
+        productRef: 'SOFT-PRO-1Y',
+        license_type: true
+      }
+      Product.findOne.mockResolvedValue(mockProduct)
       License.create.mockResolvedValue(mockCreatedLicense)
 
       // Ejecutar
       const result = await licenseService.create(licenseData)
 
       // Verificar
+      expect(Product.findOne).toHaveBeenCalledWith({
+        where: { productRef: licenseData.productRef }
+      })
       expect(License.create).toHaveBeenCalledWith(licenseData)
       expect(result).toEqual(mockCreatedLicense)
     })
 
+    it('should throw error if product not found', async () => {
+      // Configurar mocks
+      Product.findOne.mockResolvedValue(null)
+
+      // Ejecutar y verificar
+      await expect(licenseService.create(licenseData))
+        .rejects.toThrow('Product with reference SOFT-PRO-1Y not found')
+    })
+
+    it('should throw error if product does not support licenses', async () => {
+      // Configurar mocks
+      const mockProduct = {
+        productRef: 'SOFT-PRO-1Y',
+        license_type: false
+      }
+      Product.findOne.mockResolvedValue(mockProduct)
+
+      // Ejecutar y verificar
+      await expect(licenseService.create(licenseData))
+        .rejects.toThrow('Product SOFT-PRO-1Y does not support licenses. Set license_type to true first.')
+    })
+
     it('should throw error if license creation fails', async () => {
       // Configurar mocks
+      const mockProduct = {
+        productRef: 'SOFT-PRO-1Y',
+        license_type: true
+      }
+      Product.findOne.mockResolvedValue(mockProduct)
       const error = new Error('Database error')
       License.create.mockRejectedValue(error)
 
@@ -273,6 +312,10 @@ describe('LicenseService', () => {
 
     it('should import licenses successfully', async () => {
       // Configurar mocks
+      const mockProducts = [
+        { productRef: 'SOFT-PRO-1Y', license_type: true }
+      ]
+      Product.findAll.mockResolvedValue(mockProducts)
       const mockResult = csvRows.map((row, index) => ({ id: index + 1, ...row }))
       License.bulkCreate.mockResolvedValue(mockResult)
 
@@ -280,14 +323,43 @@ describe('LicenseService', () => {
       const result = await licenseService.bulkImport(csvRows)
 
       // Verificar
+      expect(Product.findAll).toHaveBeenCalledWith({
+        where: { productRef: ['SOFT-PRO-1Y'] },
+        attributes: ['productRef', 'license_type']
+      })
       expect(License.bulkCreate).toHaveBeenCalledWith(csvRows, {
         ignoreDuplicates: true
       })
       expect(result).toEqual(mockResult)
     })
 
+    it('should throw error if products not found', async () => {
+      // Configurar mocks
+      Product.findAll.mockResolvedValue([]) // No products found
+
+      // Ejecutar y verificar
+      await expect(licenseService.bulkImport(csvRows))
+        .rejects.toThrow('Products not found: SOFT-PRO-1Y')
+    })
+
+    it('should throw error if products do not support licenses', async () => {
+      // Configurar mocks
+      const mockProducts = [
+        { productRef: 'SOFT-PRO-1Y', license_type: false }
+      ]
+      Product.findAll.mockResolvedValue(mockProducts)
+
+      // Ejecutar y verificar
+      await expect(licenseService.bulkImport(csvRows))
+        .rejects.toThrow('Products do not support licenses: SOFT-PRO-1Y. Set license_type to true first.')
+    })
+
     it('should handle bulk import errors', async () => {
       // Configurar mocks
+      const mockProducts = [
+        { productRef: 'SOFT-PRO-1Y', license_type: true }
+      ]
+      Product.findAll.mockResolvedValue(mockProducts)
       const error = new Error('Bulk create failed')
       License.bulkCreate.mockRejectedValue(error)
 

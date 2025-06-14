@@ -181,8 +181,8 @@ class ProductService {
     }
 
     // Actualizar el producto
-    await product.update(productData)
-    return product
+    const updatedProduct = await product.update(productData)
+    return updatedProduct
   }
 
   /**
