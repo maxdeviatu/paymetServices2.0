@@ -1,18 +1,45 @@
 const express = require('express')
 const cors = require('cors')
 const morgan = require('morgan')
+const helmet = require('helmet')
 const { initDB } = require('./models/db')
 const { createSuperAdmin } = require('./scripts/createSuperAdmin')
 const logger = require('./config/logger')
 const { PORT } = require('./config')
+const jobScheduler = require('./jobs/scheduler')
+const { generalLimiter } = require('./middlewares/rateLimiter')
 
 const app = express()
 
-// Middleware
-app.use(cors())
-app.use(express.json())
-app.use(express.urlencoded({ extended: true }))
-app.use(morgan('dev'))
+// Security middleware
+app.use(helmet({
+  contentSecurityPolicy: false, // Disable CSP for API
+  crossOriginEmbedderPolicy: false
+}))
+
+// Rate limiting for all requests
+app.use('/api', generalLimiter)
+
+// CORS middleware
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: false
+}))
+
+// Body parsing middleware
+app.use(express.json({ limit: '10mb' }))
+app.use(express.urlencoded({ extended: true, limit: '10mb' }))
+
+// Logging middleware
+app.use(morgan('combined', {
+  stream: {
+    write: (message) => {
+      logger.info(message.trim())
+    }
+  }
+}))
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -74,6 +101,12 @@ async function startServer() {
       logger.info(`Servidor corriendo en puerto ${PORT}`)
       logger.info(`Ambiente: ${process.env.NODE_ENV}`)
       logger.info(`Health check disponible en: http://localhost:${PORT}/health`)
+      
+      // Iniciar job scheduler para tareas en segundo plano
+      if (process.env.NODE_ENV !== 'test') {
+        jobScheduler.start()
+        logger.info('Job scheduler iniciado')
+      }
     })
   } catch (error) {
     logger.error('Error fatal al iniciar el servidor:', error)

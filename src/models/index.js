@@ -4,6 +4,8 @@ const { Admin } = require('./admin.model')
 const { User, DOCUMENT_TYPES } = require('./user.model')
 const OtpCode = require('./otp.model')
 const License = require('./license.model')
+const Order = require('./order.model')
+const Transaction = require('./transaction.model')
 const { initDB } = require('./db')
 
 // Establecer relaciones entre modelos
@@ -22,6 +24,43 @@ Product.hasMany(License, {
   as: 'licenses'
 })
 
+// Order associations
+Order.belongsTo(User, { 
+  foreignKey: 'customerId', 
+  as: 'customer'
+})
+Order.belongsTo(Product, { 
+  foreignKey: 'productRef', 
+  targetKey: 'productRef',
+  as: 'product'
+})
+User.hasMany(Order, { 
+  foreignKey: 'customerId', 
+  as: 'orders'
+})
+Product.hasMany(Order, { 
+  foreignKey: 'productRef', 
+  sourceKey: 'productRef',
+  as: 'orders'
+})
+
+// Transaction associations
+Transaction.belongsTo(Order, { 
+  foreignKey: 'orderId', 
+  as: 'order'
+})
+Order.hasMany(Transaction, { 
+  foreignKey: 'orderId', 
+  as: 'transactions'
+})
+
+// License-Order relationship (for fulfillment tracking)
+License.belongsTo(Order, {
+  foreignKey: 'orderId',
+  as: 'order',
+  allowNull: true
+})
+
 module.exports = {
   Product,
   Discount,
@@ -29,6 +68,8 @@ module.exports = {
   User,
   OtpCode,
   License,
+  Order,
+  Transaction,
   DOCUMENT_TYPES,
   initDB
 }
