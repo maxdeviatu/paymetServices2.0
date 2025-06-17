@@ -5,8 +5,9 @@ const emailService = require('../email')
 
 // Payment providers
 const MockProvider = require('./providers/mock')
+const CobreProvider = require('./providers/cobre')
 // const EPaycoProvider = require('./providers/epayco')
-// const CobreProvider = require('./providers/cobre')
+// const PayUProvider = require('./providers/payu')
 
 /**
  * Payment service factory and orchestrator
@@ -14,10 +15,93 @@ const MockProvider = require('./providers/mock')
 class PaymentService {
   constructor() {
     this.providers = {
-      mock: new MockProvider()
+      mock: new MockProvider(),
+      cobre: CobreProvider
       // epayco: new EPaycoProvider(),
-      // cobre: new CobreProvider()
+      // payu: new PayUProvider()
     }
+    this.initialized = false
+  }
+
+  /**
+   * Initialize all payment providers
+   */
+  async initialize() {
+    if (this.initialized) {
+      return
+    }
+
+    try {
+      logger.info('🔍 Validando proveedores de pago...')
+      
+      // Get list of available providers
+      const availableProviders = Object.keys(this.providers).filter(name => name !== 'mock')
+      
+      logger.info('📦 Proveedores de pago encontrados:')
+      availableProviders.forEach(provider => {
+        logger.info(`   - ${provider.charAt(0).toUpperCase() + provider.slice(1)}`)
+      })
+      
+      // Initialize each provider concurrently
+      const initPromises = availableProviders.map(async (providerName) => {
+        const provider = this.providers[providerName]
+        if (provider && typeof provider.authenticate === 'function') {
+          logger.info(`\n🔐 ${providerName.charAt(0).toUpperCase() + providerName.slice(1)} - Autenticación:`)
+          try {
+            await provider.authenticate()
+            logger.info(`✅ ${providerName} authentication successful on startup`)
+            return { provider: providerName, status: 'success' }
+          } catch (error) {
+            logger.error(`❌ Error inicializando ${providerName}:`, error.message)
+            return { provider: providerName, status: 'error', error: error.message }
+          }
+        }
+        return { provider: providerName, status: 'skipped' }
+      })
+
+      const results = await Promise.allSettled(initPromises)
+      
+      // Log initialization results
+      const successful = results.filter(r => r.status === 'fulfilled' && r.value.status === 'success').length
+      const failed = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && r.value.status === 'error')).length
+      
+      logger.info(`\n📊 Inicialización de proveedores completada:`)
+      logger.info(`   ✅ Exitosos: ${successful}`)
+      if (failed > 0) {
+        logger.info(`   ❌ Fallidos: ${failed}`)
+      }
+      
+      this.initialized = true
+      
+    } catch (error) {
+      logger.error('❌ Error durante la inicialización de proveedores:', error.message)
+      throw error
+    }
+  }
+
+  /**
+   * Get list of available and initialized providers
+   */
+  getAvailableProviders() {
+    return Object.keys(this.providers).filter(name => {
+      const provider = this.providers[name]
+      return provider && (name === 'mock' || this.isProviderReady(name))
+    })
+  }
+
+  /**
+   * Check if a provider is ready for use
+   */
+  isProviderReady(providerName) {
+    const provider = this.providers[providerName]
+    if (!provider) return false
+    
+    // For providers with authentication, check if they have a valid token
+    if (typeof provider.isTokenValid === 'function') {
+      return provider.isTokenValid()
+    }
+    
+    return true
   }
 
   /**
@@ -28,6 +112,12 @@ class PaymentService {
     if (!provider) {
       throw new Error(`Payment provider '${providerName}' not supported`)
     }
+    
+    // Check if provider is ready
+    if (!this.isProviderReady(providerName)) {
+      throw new Error(`Payment provider '${providerName}' is not ready or authenticated`)
+    }
+    
     return provider
   }
 

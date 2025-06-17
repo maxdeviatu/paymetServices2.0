@@ -24,5 +24,16 @@ module.exports = {
   },
 
   // Logging Configuration
-  LOG_LEVEL: process.env.LOG_LEVEL || 'info'
+  LOG_LEVEL: process.env.LOG_LEVEL || 'info',
+
+  cobre: {
+    baseUrl: process.env.COBRE_BASE_URL,
+    userId: process.env.COBRE_USER_ID,
+    secret: process.env.COBRE_SECRET,
+    balanceId: process.env.COBRE_BALANCE_ID,
+    webhook: {
+      secret: process.env.COBRE_WEBHOOK_SECRET,
+      url: process.env.COBRE_WEBHOOK_URL
+    }
+  }
 }

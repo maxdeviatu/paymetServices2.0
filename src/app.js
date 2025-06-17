@@ -8,6 +8,7 @@ const logger = require('./config/logger')
 const { PORT } = require('./config')
 const jobScheduler = require('./jobs/scheduler')
 const { generalLimiter } = require('./middlewares/rateLimiter')
+const paymentService = require('./services/payment')
 
 const app = express()
 
@@ -76,8 +77,8 @@ app.use((err, req, res, next) => {
   })
 })
 
-// Función para iniciar el servidor
-async function startServer() {
+// Función para inicializar el servidor
+async function initializeServer() {
   try {
     // Inicializar la base de datos
     const dbConnected = await initDB()
@@ -107,9 +108,18 @@ async function startServer() {
         jobScheduler.start()
         logger.info('Job scheduler iniciado')
       }
+
+      // Inicializar proveedores de pago después de que todo esté listo
+      paymentService.initialize()
+        .then(() => {
+          logger.info('Payment providers initialization completed')
+        })
+        .catch(error => {
+          logger.error('Failed to initialize payment providers:', error.message)
+        })
     })
   } catch (error) {
-    logger.error('Error fatal al iniciar el servidor:', error)
+    console.error('Failed to initialize server:', error)
     process.exit(1)
   }
 }
@@ -125,9 +135,7 @@ process.on('SIGINT', () => {
   process.exit(0)
 })
 
-// Iniciar servidor
-if (require.main === module) {
-  startServer()
-}
+// Inicializar el servidor
+initializeServer()
 
 module.exports = app

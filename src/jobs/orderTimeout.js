@@ -91,7 +91,7 @@ class OrderTimeoutJob {
    * Process a single expired order
    */
   async processExpiredOrder(order) {
-    return await sequelize.transaction(async (t) => {
+    return await sequelize.transaction(async (transaction) => {
       logger.logBusiness('order:timeout', {
         orderId: order.id,
         customerId: order.customerId,
@@ -102,7 +102,7 @@ class OrderTimeoutJob {
       // Update order status to CANCELED
       await order.update({
         status: 'CANCELED'
-      }, { transaction: t })
+      }, { transaction })
 
       // Update all related transactions to FAILED
       await Transaction.update(
@@ -112,7 +112,7 @@ class OrderTimeoutJob {
             orderId: order.id,
             status: { [Op.in]: ['CREATED', 'PENDING'] }
           },
-          transaction: t
+          transaction
         }
       )
 
@@ -122,7 +122,7 @@ class OrderTimeoutJob {
           orderId: order.id,
           status: { [Op.in]: ['RESERVED', 'SOLD'] }
         },
-        transaction: t
+        transaction
       })
 
       if (reservedLicenses.length > 0) {
@@ -132,7 +132,7 @@ class OrderTimeoutJob {
             orderId: null,
             reservedAt: null,
             soldAt: null
-          }, { transaction: t })
+          }, { transaction })
 
           logger.logBusiness('license:returned', {
             licenseId: license.id,
