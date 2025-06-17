@@ -6,7 +6,7 @@ const OtpCode = require('./otp.model')
 const License = require('./license.model')
 const Order = require('./order.model')
 const Transaction = require('./transaction.model')
-const { initDB } = require('./db')
+const { initDB, sequelize } = require('./db')
 
 // Establecer relaciones entre modelos
 Product.belongsTo(Discount, { foreignKey: 'discountId', as: 'discount' })
@@ -71,5 +71,6 @@ module.exports = {
   Order,
   Transaction,
   DOCUMENT_TYPES,
-  initDB
+  initDB,
+  sequelize
 }
