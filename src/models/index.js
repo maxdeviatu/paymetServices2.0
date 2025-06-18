@@ -6,6 +6,7 @@ const OtpCode = require('./otp.model')
 const License = require('./license.model')
 const Order = require('./order.model')
 const Transaction = require('./transaction.model')
+const CobreCheckout = require('./cobreCheckout')
 const { initDB, sequelize } = require('./db')
 
 // Establecer relaciones entre modelos
@@ -61,6 +62,16 @@ License.belongsTo(Order, {
   allowNull: true
 })
 
+// CobreCheckout associations
+CobreCheckout.belongsTo(Transaction, {
+  foreignKey: 'transactionId',
+  as: 'transaction'
+})
+Transaction.hasOne(CobreCheckout, {
+  foreignKey: 'transactionId',
+  as: 'cobreCheckout'
+})
+
 module.exports = {
   Product,
   Discount,
@@ -70,6 +81,7 @@ module.exports = {
   License,
   Order,
   Transaction,
+  CobreCheckout,
   DOCUMENT_TYPES,
   initDB,
   sequelize

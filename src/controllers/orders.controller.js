@@ -41,22 +41,74 @@ exports.createOrder = async (req, res) => {
       shippingInfo
     })
 
-    res.status(201).json({
-      success: true,
-      data: {
+    // If provider is cobre, create payment intent automatically
+    let paymentIntent = null
+    if (provider === 'cobre') {
+      logger.logBusiness('order:attempting.checkout', {
         orderId: result.order.id,
-        customerId: result.customer.id,
-        transactionId: result.transaction.id,
+        provider,
+        message: 'Attempting to create checkout for Cobre'
+      })
+      
+      try {
+        paymentIntent = await paymentService.createPaymentIntent(result.order.id, {
+          provider
+        })
+        
+        logger.logBusiness('order:checkout.created', {
+          orderId: result.order.id,
+          transactionId: paymentIntent.transactionId,
+          checkoutUrl: paymentIntent.redirectUrl,
+          gatewayRef: paymentIntent.gatewayRef
+        })
+      } catch (paymentError) {
+        logger.logError(paymentError, {
+          operation: 'createPaymentIntent',
+          orderId: result.order.id,
+          provider,
+          message: 'Failed to create payment intent',
+          stack: paymentError.stack
+        })
+        // Continue with order creation even if payment intent fails
+        // The user can try to create payment intent later
+      }
+    }
+
+    // If payment intent was created successfully, use updated transaction data
+    let transactionData = result.transaction
+    if (paymentIntent) {
+      // Use the updated transaction information from payment intent
+      transactionData = {
+        id: result.transaction.id,
+        gateway: result.transaction.gateway,
+        gatewayRef: paymentIntent.gatewayRef, // Use the real gatewayRef from Cobre
+        status: 'PENDING', // Status updated after payment intent creation
+        amount: paymentIntent.amount,
+        currency: paymentIntent.currency
+      }
+    }
+
+    // Prepare response data
+    const responseData = {
+      order: {
+        id: result.order.id,
         productRef: result.order.productRef,
         qty: result.order.qty,
-        subtotal: result.order.subtotal,
-        discountTotal: result.order.discountTotal,
-        taxTotal: result.order.taxTotal,
-        grandTotal: result.order.grandTotal,
-        currency: result.transaction.currency,
         status: result.order.status,
-        provider: result.transaction.gateway
+        grandTotal: result.order.grandTotal,
+        currency: transactionData.currency
       },
+      transaction: transactionData
+    }
+
+    // Add payment URL if checkout was created
+    if (paymentIntent && paymentIntent.redirectUrl) {
+      responseData.transaction.paymentUrl = paymentIntent.redirectUrl
+    }
+
+    res.status(201).json({
+      success: true,
+      data: responseData,
       message: 'Order created successfully'
     })
   } catch (error) {

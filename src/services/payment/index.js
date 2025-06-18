@@ -1,4 +1,4 @@
-const { Transaction, Order, sequelize } = require('../../models')
+const { Transaction, Order, Product, CobreCheckout, sequelize } = require('../../models')
 const { Op } = require('sequelize')
 const logger = require('../../config/logger')
 const emailService = require('../email')
@@ -129,20 +129,12 @@ class PaymentService {
       logger.logBusiness('payment:createIntent', { orderId, options })
 
       return await sequelize.transaction(async (t) => {
-        // Get order with transactions
+        // First, get order with lock WITHOUT includes to avoid FOR UPDATE with outer joins
         const order = await Order.findByPk(orderId, {
-          include: [
-            { 
-              association: 'transactions',
-              where: { status: { [Op.in]: ['CREATED', 'PENDING'] } },
-              required: false
-            },
-            { association: 'product' }
-          ],
           lock: t.LOCK.UPDATE,
           transaction: t
         })
-
+        
         if (!order) {
           throw new Error('Order not found')
         }
@@ -151,17 +143,41 @@ class PaymentService {
           throw new Error(`Cannot create payment intent for order with status ${order.status}`)
         }
 
-        // Find or create transaction
-        let transaction = order.transactions?.[0]
+        // Get product separately
+        const product = await Product.findOne({
+          where: { productRef: order.productRef },
+          transaction: t
+        })
+
+        // Get existing transactions separately  
+        const existingTransactions = await Transaction.findAll({
+          where: { 
+            orderId: order.id,
+            gateway: options.provider || 'mock',
+            status: { [Op.in]: ['CREATED', 'PENDING'] }
+          },
+          transaction: t
+        })
+        
+        logger.logBusiness('payment:order.loaded', {
+          orderId,
+          orderFound: !!order,
+          orderStatus: order?.status,
+          transactionsCount: existingTransactions?.length || 0,
+          firstTransactionStatus: existingTransactions?.[0]?.status
+        })
+
+        // Find or create transaction for the specified provider
+        let transaction = existingTransactions?.[0]
         
         if (!transaction) {
-          // Create new transaction if none exists
+          // Create new transaction if none exists for this provider
           transaction = await Transaction.create({
             orderId: order.id,
             gateway: options.provider || 'mock',
             gatewayRef: `temp-${order.id}-${Date.now()}`,
             amount: order.grandTotal,
-            currency: order.product?.currency || 'USD',
+            currency: product?.currency || 'USD',
             status: 'CREATED'
           }, { transaction: t })
         }
@@ -170,7 +186,7 @@ class PaymentService {
         const provider = this.getProvider(transaction.gateway)
 
         // Create payment intent with provider
-        const intentResult = await provider.createIntent({ order, transaction })
+        const intentResult = await provider.createIntent({ order, transaction, product })
 
         // Update transaction with gateway reference
         await transaction.update({
@@ -178,6 +194,26 @@ class PaymentService {
           status: 'PENDING',
           meta: intentResult.meta || {}
         }, { transaction: t })
+
+        // If using Cobre, save checkout data
+        if (transaction.gateway === 'cobre' && intentResult.meta) {
+          await CobreCheckout.create({
+            transactionId: transaction.id,
+            checkoutId: intentResult.gatewayRef,
+            checkoutUrl: intentResult.redirectUrl,
+            amount: transaction.amount,
+            currency: transaction.currency,
+            status: 'PENDING',
+            validUntil: new Date(intentResult.meta.validUntil),
+            metadata: intentResult.meta
+          }, { transaction: t })
+          
+          logger.logBusiness('cobre:checkout.created', {
+            transactionId: transaction.id,
+            checkoutId: intentResult.gatewayRef,
+            checkoutUrl: intentResult.redirectUrl
+          })
+        }
 
         logger.logBusiness('payment:createIntent.success', {
           orderId,
