@@ -6,7 +6,7 @@ const userService = require('./user.service')
 /**
  * Create order with auto user creation and transaction
  */
-async function createOrder(orderData) {
+async function createOrder (orderData) {
   try {
     logger.logBusiness('order:create', {
       productRef: orderData.productRef,
@@ -42,12 +42,12 @@ async function createOrder(orderData) {
       // 3. Calculate totals
       const qty = orderData.qty || 1
       const subtotal = product.price * qty
-      
+
       let discountTotal = 0
       if (product.hasDiscount && product.discount) {
         const now = new Date()
-        if (product.discount.isActive && 
-            product.discount.startDate <= now && 
+        if (product.discount.isActive &&
+            product.discount.startDate <= now &&
             product.discount.endDate >= now) {
           discountTotal = Math.floor((subtotal * product.discount.amount) / 100)
         }
@@ -106,7 +106,7 @@ async function createOrder(orderData) {
 /**
  * Get or create customer from order data
  */
-async function getOrCreateCustomer(customerData, transaction) {
+async function getOrCreateCustomer (customerData, transaction) {
   const { email, documentType, documentNumber, firstName, lastName, phone } = customerData
 
   if (!email && !documentNumber) {
@@ -115,14 +115,14 @@ async function getOrCreateCustomer(customerData, transaction) {
 
   // Try to find existing user
   let user = null
-  
+
   if (email) {
     user = await User.findOne({
       where: { email },
       transaction
     })
   }
-  
+
   if (!user && documentType && documentNumber) {
     user = await User.findOne({
       where: {
@@ -173,7 +173,7 @@ async function getOrCreateCustomer(customerData, transaction) {
 /**
  * Get order by ID with all relations
  */
-async function getOrderById(orderId, includeCustomer = true) {
+async function getOrderById (orderId, includeCustomer = true) {
   try {
     const include = [
       { association: 'product' },
@@ -203,15 +203,15 @@ async function getOrderById(orderId, includeCustomer = true) {
 /**
  * Update order status
  */
-async function updateOrderStatus(orderId, status, transaction = null) {
+async function updateOrderStatus (orderId, status, transaction = null) {
   try {
     logger.logBusiness('order:statusUpdate', { orderId, status })
 
     const options = transaction ? { transaction } : {}
-    
+
     const [updatedRows] = await Order.update(
       { status },
-      { 
+      {
         where: { id: orderId },
         ...options
       }
@@ -222,7 +222,7 @@ async function updateOrderStatus(orderId, status, transaction = null) {
     }
 
     logger.logBusiness('order:statusUpdate.success', { orderId, status })
-    
+
     return true
   } catch (error) {
     logger.logError(error, {
@@ -237,7 +237,7 @@ async function updateOrderStatus(orderId, status, transaction = null) {
 /**
  * Get orders by customer ID
  */
-async function getOrdersByCustomer(customerId, options = {}) {
+async function getOrdersByCustomer (customerId, options = {}) {
   try {
     const { page = 1, limit = 20, status } = options
     const offset = (page - 1) * limit
@@ -280,7 +280,7 @@ async function getOrdersByCustomer(customerId, options = {}) {
 /**
  * Cancel order (timeout or manual)
  */
-async function cancelOrder(orderId, reason = 'MANUAL') {
+async function cancelOrder (orderId, reason = 'MANUAL') {
   try {
     logger.logBusiness('order:cancel', { orderId, reason })
 
@@ -305,7 +305,7 @@ async function cancelOrder(orderId, reason = 'MANUAL') {
       // Update all transactions to FAILED
       await Transaction.update(
         { status: 'FAILED' },
-        { 
+        {
           where: { orderId },
           transaction: t
         }

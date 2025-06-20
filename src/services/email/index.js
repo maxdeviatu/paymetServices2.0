@@ -5,7 +5,7 @@ const logger = require('../../config/logger')
  * In development, logs emails instead of sending them
  */
 class EmailService {
-  constructor() {
+  constructor () {
     this.provider = process.env.EMAIL_PROVIDER || 'log'
     this.from = process.env.EMAIL_FROM || 'noreply@innovatelearning.com.co'
   }
@@ -13,7 +13,7 @@ class EmailService {
   /**
    * Send license delivery email
    */
-  async sendLicenseEmail({ customer, product, license, order }) {
+  async sendLicenseEmail ({ customer, product, license, order }) {
     try {
       const emailData = {
         to: customer.email,
@@ -62,7 +62,7 @@ class EmailService {
   /**
    * Send order confirmation email
    */
-  async sendOrderConfirmation({ customer, product, order, transaction }) {
+  async sendOrderConfirmation ({ customer, product, order, transaction }) {
     try {
       const emailData = {
         to: customer.email,
@@ -109,9 +109,9 @@ class EmailService {
   /**
    * Log email in development
    */
-  async logEmail(emailData) {
+  async logEmail (emailData) {
     const emailContent = this.renderTemplate(emailData.template, emailData.data)
-    
+
     logger.info('📧 EMAIL (Development Mode)', {
       to: emailData.to,
       from: emailData.from,
@@ -127,11 +127,11 @@ class EmailService {
   /**
    * Send actual email (production)
    */
-  async sendEmail(emailData) {
+  async sendEmail (emailData) {
     // TODO: Implement actual email sending
     // This could use SendGrid, AWS SES, or another email provider
     const emailContent = this.renderTemplate(emailData.template, emailData.data)
-    
+
     logger.info('Sending email via provider', {
       provider: this.provider,
       to: emailData.to,
@@ -142,14 +142,14 @@ class EmailService {
     console.log(`EMAIL TO: ${emailData.to}`)
     console.log(`SUBJECT: ${emailData.subject}`)
     console.log(`CONTENT:\n${emailContent}`)
-    
+
     return { messageId: `email-${Date.now()}`, provider: this.provider }
   }
 
   /**
    * Render email template
    */
-  renderTemplate(templateName, data) {
+  renderTemplate (templateName, data) {
     switch (templateName) {
       case 'license-delivery':
         return this.renderLicenseTemplate(data)
@@ -163,7 +163,7 @@ class EmailService {
   /**
    * Render license delivery template
    */
-  renderLicenseTemplate(data) {
+  renderLicenseTemplate (data) {
     return `
 ¡Hola ${data.customerName}!
 
@@ -192,7 +192,7 @@ El equipo de Innovate Learning
   /**
    * Render order confirmation template
    */
-  renderOrderConfirmationTemplate(data) {
+  renderOrderConfirmationTemplate (data) {
     return `
 ¡Hola ${data.customerName}!
 
@@ -209,8 +209,8 @@ Te confirmamos que hemos recibido tu orden correctamente.
 • Método de pago: ${data.paymentMethod}
 • Fecha: ${data.purchaseDate}
 
-${data.productName.toLowerCase().includes('licencia') || data.productName.toLowerCase().includes('software') 
-  ? '🚀 Tu licencia será enviada por email en los próximos minutos.' 
+${data.productName.toLowerCase().includes('licencia') || data.productName.toLowerCase().includes('software')
+  ? '🚀 Tu licencia será enviada por email en los próximos minutos.'
   : '📦 Tu pedido será procesado y recibirás actualizaciones por email.'}
 
 ¡Gracias por tu compra!

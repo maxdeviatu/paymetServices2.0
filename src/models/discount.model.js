@@ -32,7 +32,7 @@ const Discount = sequelize.define('Discount', {
   }
 }, {
   validate: {
-    dateRange() {
+    dateRange () {
       if (this.startDate >= this.endDate) {
         throw new Error('La fecha de inicio debe ser anterior a la fecha de fin')
       }

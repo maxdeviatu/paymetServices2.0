@@ -273,4 +273,4 @@ describe('Auth Middleware', () => {
       expect(mockNext).not.toHaveBeenCalled()
     })
   })
-}) 
+})

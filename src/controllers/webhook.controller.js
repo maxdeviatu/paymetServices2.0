@@ -1,5 +1,5 @@
-const webhookService = require('../services/webhook');
-const logger = require('../config/logger');
+const webhookService = require('../services/webhook')
+const logger = require('../config/logger')
 
 /**
  * Controlador principal para webhooks
@@ -11,15 +11,15 @@ class WebhookController {
    * @param {express.Request} req - Request de Express
    * @param {express.Response} res - Response de Express
    */
-  async handleWebhook(req, res) {
+  async handleWebhook (req, res) {
     try {
-      const { provider } = req.params;
-      
+      const { provider } = req.params
+
       if (!provider) {
         return res.status(400).json({
           success: false,
           message: 'Provider parameter is required'
-        });
+        })
       }
 
       logger.info('WebhookController: Received webhook', {
@@ -28,10 +28,10 @@ class WebhookController {
         userAgent: req.get('User-Agent'),
         contentType: req.get('Content-Type'),
         bodySize: req.body ? req.body.length : 0
-      });
+      })
 
       // Procesar webhook con el servicio
-      const result = await webhookService.process(provider, req);
+      const result = await webhookService.process(provider, req)
 
       // Siempre responder con 200 para evitar reintentos del proveedor
       res.status(200).json({
@@ -47,7 +47,7 @@ class WebhookController {
           newStatus: result.newStatus
         },
         message: 'Webhook processed successfully'
-      });
+      })
 
       logger.info('WebhookController: Webhook processed successfully', {
         provider,
@@ -55,29 +55,28 @@ class WebhookController {
         eventId: result.eventId,
         externalRef: result.externalRef,
         processingTime: result.processingTime
-      });
-
+      })
     } catch (error) {
       logger.error('WebhookController: Error processing webhook', {
         provider: req.params.provider,
         error: error.message,
         stack: error.stack,
         body: req.body ? req.body.toString().substring(0, 200) + '...' : 'No body'
-      });
+      })
 
       // Para webhooks, debemos responder 200 para evitar reintentos del proveedor
       // a menos que sea un error de validación específico
-      const shouldReturn200 = !error.message.includes('signature') && 
+      const shouldReturn200 = !error.message.includes('signature') &&
                              !error.message.includes('validation') &&
-                             !error.message.includes('Unsupported provider');
+                             !error.message.includes('Unsupported provider')
 
-      const statusCode = shouldReturn200 ? 200 : 400;
+      const statusCode = shouldReturn200 ? 200 : 400
 
       res.status(statusCode).json({
         success: false,
         message: error.message,
         error: process.env.NODE_ENV === 'development' ? error.stack : undefined
-      });
+      })
     }
   }
 
@@ -86,16 +85,16 @@ class WebhookController {
    * @param {express.Request} req - Request de Express
    * @param {express.Response} res - Response de Express
    */
-  healthCheck(req, res) {
-    const { provider } = req.params;
-    
+  healthCheck (req, res) {
+    const { provider } = req.params
+
     res.status(200).json({
       success: true,
       message: 'Webhook endpoint is healthy',
       timestamp: new Date().toISOString(),
       provider: provider || 'unknown',
       environment: process.env.NODE_ENV || 'development'
-    });
+    })
   }
 
   /**
@@ -103,16 +102,16 @@ class WebhookController {
    * @param {express.Request} req - Request de Express
    * @param {express.Response} res - Response de Express
    */
-  async mockPaymentComplete(req, res) {
+  async mockPaymentComplete (req, res) {
     try {
-      const { gatewayRef } = req.params;
-      const { status = 'PAID', amount, currency = 'USD' } = req.body;
+      const { gatewayRef } = req.params
+      const { status = 'PAID', amount, currency = 'USD' } = req.body
 
       if (!gatewayRef) {
         return res.status(400).json({
           success: false,
           message: 'gatewayRef is required'
-        });
+        })
       }
 
       logger.info('WebhookController: Mock payment completion', {
@@ -120,7 +119,7 @@ class WebhookController {
         status,
         amount,
         currency
-      });
+      })
 
       // Simular payload de webhook
       const mockWebhookReq = {
@@ -141,27 +140,26 @@ class WebhookController {
         },
         ip: req.ip,
         get: (header) => req.get(header)
-      };
+      }
 
       // Procesar a través del servicio de webhooks
-      const result = await webhookService.process('mock', mockWebhookReq);
+      const result = await webhookService.process('mock', mockWebhookReq)
 
       res.status(200).json({
         success: true,
         data: result,
         message: 'Mock payment completed successfully'
-      });
-
+      })
     } catch (error) {
       logger.error('WebhookController: Error in mock payment completion', {
         gatewayRef: req.params.gatewayRef,
         error: error.message
-      });
+      })
 
       res.status(400).json({
         success: false,
         message: error.message
-      });
+      })
     }
   }
 
@@ -170,31 +168,30 @@ class WebhookController {
    * @param {express.Request} req - Request de Express
    * @param {express.Response} res - Response de Express
    */
-  async getStatistics(req, res) {
+  async getStatistics (req, res) {
     try {
       const filters = {
         provider: req.query.provider,
         status: req.query.status,
         startDate: req.query.startDate,
         endDate: req.query.endDate
-      };
+      }
 
-      const stats = await webhookService.getStatistics(filters);
+      const stats = await webhookService.getStatistics(filters)
 
       res.status(200).json({
         success: true,
         data: stats
-      });
-
+      })
     } catch (error) {
       logger.error('WebhookController: Error getting statistics', {
         error: error.message
-      });
+      })
 
       res.status(500).json({
         success: false,
         message: error.message
-      });
+      })
     }
   }
 
@@ -203,7 +200,7 @@ class WebhookController {
    * @param {express.Request} req - Request de Express
    * @param {express.Response} res - Response de Express
    */
-  async getWebhookEvents(req, res) {
+  async getWebhookEvents (req, res) {
     try {
       const options = {
         page: parseInt(req.query.page) || 1,
@@ -213,27 +210,26 @@ class WebhookController {
         eventType: req.query.eventType,
         startDate: req.query.startDate,
         endDate: req.query.endDate
-      };
+      }
 
-      const result = await webhookService.getWebhookEvents(options);
+      const result = await webhookService.getWebhookEvents(options)
 
       res.status(200).json({
         success: true,
         data: result
-      });
-
+      })
     } catch (error) {
       logger.error('WebhookController: Error getting webhook events', {
         error: error.message
-      });
+      })
 
       res.status(500).json({
         success: false,
         message: error.message
-      });
+      })
     }
   }
 }
 
 // Exportar instancia del controlador
-module.exports = new WebhookController();
+module.exports = new WebhookController()

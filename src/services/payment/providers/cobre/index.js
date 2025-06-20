@@ -1,20 +1,20 @@
-const auth = require('./auth');
-const accountsService = require('./accounts');
-const axios = require('axios');
-const config = require('../../../../config');
-const logger = require('../../../../config/logger');
+const auth = require('./auth')
+const accountsService = require('./accounts')
+const axios = require('axios')
+const config = require('../../../../config')
+const logger = require('../../../../config/logger')
 
 class CobreProvider {
   /**
    * Sanitize text for Cobre API - remove special characters that cause CHK004 error
    */
-  sanitizeForCobre(text) {
-    if (!text) return '';
+  sanitizeForCobre (text) {
+    if (!text) return ''
     // Remove special characters, keep only letters, numbers, spaces, and basic punctuation
     return text
       .replace(/[^\w\s\-\.]/g, '') // Remove special chars except word chars, spaces, hyphens, periods
       .replace(/\s+/g, ' ') // Normalize multiple spaces to single space
-      .trim();
+      .trim()
   }
 
   /**
@@ -22,82 +22,79 @@ class CobreProvider {
    * Format: {referenciaProducto}-{procesadorPago}-{orderIdInterno}-{fechaHoraLocal}
    * Example: CURSO-BASICO-cobre-6-2025-06-17-1946
    */
-  generateExternalId(productRef, orderId) {
+  generateExternalId (productRef, orderId) {
     // Get Colombia time (UTC-5)
-    const colombiaTime = new Date(Date.now() - (5 * 60 * 60 * 1000));
-    const year = colombiaTime.getUTCFullYear();
-    const month = String(colombiaTime.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(colombiaTime.getUTCDate()).padStart(2, '0');
-    const hour = String(colombiaTime.getUTCHours()).padStart(2, '0');
-    const minute = String(colombiaTime.getUTCMinutes()).padStart(2, '0');
-    
-    const dateTimeLocal = `${year}-${month}-${day}-${hour}${minute}`;
-    
-    return `${productRef}-cobre-${orderId}-${dateTimeLocal}`;
+    const colombiaTime = new Date(Date.now() - (5 * 60 * 60 * 1000))
+    const year = colombiaTime.getUTCFullYear()
+    const month = String(colombiaTime.getUTCMonth() + 1).padStart(2, '0')
+    const day = String(colombiaTime.getUTCDate()).padStart(2, '0')
+    const hour = String(colombiaTime.getUTCHours()).padStart(2, '0')
+    const minute = String(colombiaTime.getUTCMinutes()).padStart(2, '0')
+
+    const dateTimeLocal = `${year}-${month}-${day}-${hour}${minute}`
+
+    return `${productRef}-cobre-${orderId}-${dateTimeLocal}`
   }
 
   /**
    * Generate unique transaction ID for webhook tracking
    * Format: mm_{randomString}
    */
-  generateUniqueTransactionId() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let result = 'mm_';
+  generateUniqueTransactionId () {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+    let result = 'mm_'
     for (let i = 0; i < 16; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
+      result += chars.charAt(Math.floor(Math.random() * chars.length))
     }
-    return result;
+    return result
   }
 
-  async authenticate() {
-    return auth.authenticate();
+  async authenticate () {
+    return auth.authenticate()
   }
 
-  getAuthHeaders() {
-    return auth.getAuthHeaders();
+  getAuthHeaders () {
+    return auth.getAuthHeaders()
   }
 
   /**
    * Check if provider is ready (has valid token)
    */
-  isTokenValid() {
-    return auth.isTokenValid();
+  isTokenValid () {
+    return auth.isTokenValid()
   }
 
   /**
    * Create payment intent (checkout) for order
    */
-  async createIntent({ order, transaction, product }) {
+  async createIntent ({ order, transaction, product }) {
     try {
-      logger.info(' Creando checkout en Cobre...');
-      
+      logger.info(' Creando checkout en Cobre...')
+
       // Get account data
-      let account = accountsService.getCurrentAccount();
+      let account = accountsService.getCurrentAccount()
       if (!account || !account.id) {
         // If account is not available, try to initialize it
-        logger.info(' Cuenta no disponible, intentando inicializar...');
-        const token = await auth.getAccessToken();
-        accountsService.setAccessToken(token);
-        account = await accountsService.initializeAccount();
-        
+        logger.info(' Cuenta no disponible, intentando inicializar...')
+        const token = await auth.getAccessToken()
+        accountsService.setAccessToken(token)
+        account = await accountsService.initializeAccount()
+
         if (!account || !account.id) {
-          throw new Error('No se pudo obtener/inicializar la cuenta de Cobre');
+          throw new Error('No se pudo obtener/inicializar la cuenta de Cobre')
         }
       }
 
       // Get access token
-      const token = await auth.getAccessToken();
-      
+      const token = await auth.getAccessToken()
+
       // Calculate expiration (24 horas desde ahora)
-      const validUntil = new Date(Date.now() + (24 * 60 * 60 * 1000));
-      
+      const validUntil = new Date(Date.now() + (24 * 60 * 60 * 1000))
+
       // Generate standardized external ID for better traceability
-      const productRef = product?.productRef || order.productRef;
-      const externalId = this.generateExternalId(productRef, order.id);
-      
-      // Generate unique transaction ID for webhook tracking
-      const uniqueTransactionId = this.generateUniqueTransactionId();
-      
+      const productRef = product?.productRef || order.productRef
+      const externalId = this.generateExternalId(productRef, order.id)
+
       // Prepare checkout data
       const checkoutData = {
         alias: `Order-${order.id}-${Date.now()}`,
@@ -112,12 +109,11 @@ class CobreProvider {
         money_movement_intent_limit: 1, // Single use link
         redirect_url: process.env.PAYMENT_SUCCESS_URL || 'https://innovatelearning.com.co/payment/success',
         metadata: {
-          uniqueTransactionId: uniqueTransactionId,
           orderId: order.id,
-          productRef: productRef,
+          productRef,
           customerEmail: order.customer?.email
         }
-      };
+      }
 
       logger.info(' Datos del checkout:', {
         orderId: order.id,
@@ -125,7 +121,6 @@ class CobreProvider {
         currency: product?.currency || 'USD',
         destinationId: account.id,
         externalId: checkoutData.external_id,
-        uniqueTransactionId: uniqueTransactionId,
         checkoutHeader: checkoutData.checkout_header,
         checkoutItem: checkoutData.checkout_item,
         descriptionToPayee: checkoutData.description_to_payee,
@@ -133,59 +128,61 @@ class CobreProvider {
         headerLength: checkoutData.checkout_header.length,
         itemLength: checkoutData.checkout_item.length,
         descriptionLength: checkoutData.description_to_payee.length
-      });
+      })
 
       // Create checkout
       const response = await axios.post(`${config.cobre.baseUrl}/v1/checkouts`, checkoutData, {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
-      });
+      })
 
-      const checkout = response.data;
-      
+      const checkout = response.data
+
       logger.info(' Checkout creado exitosamente:', {
         checkoutId: checkout.id,
         checkoutUrl: checkout.checkout_url,
         amount: checkout.amount,
-        validUntil: checkout.valid_until
-      });
+        validUntil: checkout.valid_until,
+        uniqueTransactionId: checkout.unique_transaction_id,
+        // Log complete response for debugging
+        completeResponse: checkout
+      })
 
       return {
-        gatewayRef: externalId, // Use our standardized external ID for better traceability
+        gatewayRef: externalId, // Use external_id as gateway reference for reliable webhook matching
         redirectUrl: checkout.checkout_url,
         meta: {
           checkoutId: checkout.id,
           checkoutUrl: checkout.checkout_url,
           validUntil: checkout.valid_until,
           destinationId: checkout.destination_id,
-          externalId: externalId,
-          uniqueTransactionId: uniqueTransactionId, // Important for webhook tracking
+          externalId,
+          // Store both checkout ID and external ID for complete tracking
           orderId: order.id,
-          productRef: productRef
+          productRef
         }
-      };
-      
+      }
     } catch (error) {
       logger.error(' Error creando checkout en Cobre:', {
         error: error.message,
         status: error.response?.status,
         data: error.response?.data,
         orderId: order.id
-      });
-      throw error;
+      })
+      throw error
     }
   }
 
   /**
    * Parse webhook from Cobre
    */
-  parseWebhook(req) {
+  parseWebhook (req) {
     // TODO: Implement webhook parsing for Cobre
     // This will be used when Cobre sends payment status updates
-    const body = req.body;
-    
+    const body = req.body
+
     return {
       gatewayRef: body.checkout_id || body.id,
       status: this.mapCobreStatus(body.status),
@@ -193,26 +190,26 @@ class CobreProvider {
       amount: body.amount,
       currency: body.currency || 'USD',
       rawData: body
-    };
+    }
   }
 
   /**
    * Map Cobre status to internal status
    */
-  mapCobreStatus(cobreStatus) {
+  mapCobreStatus (cobreStatus) {
     const statusMap = {
-      'paid': 'PAID',
-      'completed': 'PAID',
-      'successful': 'PAID',
-      'pending': 'PENDING',
-      'processing': 'PENDING',
-      'failed': 'FAILED',
-      'cancelled': 'FAILED',
-      'expired': 'FAILED'
-    };
-    
-    return statusMap[cobreStatus?.toLowerCase()] || 'FAILED';
+      paid: 'PAID',
+      completed: 'PAID',
+      successful: 'PAID',
+      pending: 'PENDING',
+      processing: 'PENDING',
+      failed: 'FAILED',
+      cancelled: 'FAILED',
+      expired: 'FAILED'
+    }
+
+    return statusMap[cobreStatus?.toLowerCase()] || 'FAILED'
   }
 }
 
-module.exports = new CobreProvider(); 
+module.exports = new CobreProvider()

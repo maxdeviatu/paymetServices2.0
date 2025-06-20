@@ -49,12 +49,12 @@ exports.createOrder = async (req, res) => {
         provider,
         message: 'Attempting to create checkout for Cobre'
       })
-      
+
       try {
         paymentIntent = await paymentService.createPaymentIntent(result.order.id, {
           provider
         })
-        
+
         logger.logBusiness('order:checkout.created', {
           orderId: result.order.id,
           transactionId: paymentIntent.transactionId,
@@ -163,8 +163,9 @@ exports.payOrder = async (req, res) => {
       body: req.body
     })
 
-    const statusCode = error.message === 'Order not found' ? 404 : 
-                      error.message.includes('Cannot create payment') ? 409 : 400
+    const statusCode = error.message === 'Order not found'
+      ? 404
+      : error.message.includes('Cannot create payment') ? 409 : 400
 
     res.status(statusCode).json({
       success: false,
@@ -188,12 +189,14 @@ exports.getOrderById = async (req, res) => {
       data: {
         id: order.id,
         customerId: order.customerId,
-        customer: includeCustomer ? {
-          id: order.customer.id,
-          firstName: order.customer.firstName,
-          lastName: order.customer.lastName,
-          email: order.customer.email
-        } : undefined,
+        customer: includeCustomer
+          ? {
+              id: order.customer.id,
+              firstName: order.customer.firstName,
+              lastName: order.customer.lastName,
+              email: order.customer.email
+            }
+          : undefined,
         product: {
           productRef: order.product.productRef,
           name: order.product.name,
@@ -316,8 +319,9 @@ exports.cancelOrder = async (req, res) => {
       body: req.body
     })
 
-    const statusCode = error.message === 'Order not found' ? 404 :
-                      error.message.includes('Cannot cancel') ? 409 : 400
+    const statusCode = error.message === 'Order not found'
+      ? 404
+      : error.message.includes('Cannot cancel') ? 409 : 400
 
     res.status(statusCode).json({
       success: false,
@@ -359,14 +363,14 @@ exports.getTransactionStatus = async (req, res) => {
  */
 exports.getAllOrders = async (req, res) => {
   try {
-    const { 
-      page = 1, 
-      limit = 20, 
-      status, 
-      customerId, 
+    const {
+      page = 1,
+      limit = 20,
+      status,
+      customerId,
       productRef,
       startDate,
-      endDate 
+      endDate
     } = req.query
 
     const result = await orderService.getAllOrders({
@@ -467,8 +471,9 @@ exports.updateOrderStatus = async (req, res) => {
       body: req.body
     })
 
-    const statusCode = error.message === 'Order not found' ? 404 :
-                      error.message.includes('Cannot update') ? 409 : 400
+    const statusCode = error.message === 'Order not found'
+      ? 404
+      : error.message.includes('Cannot update') ? 409 : 400
 
     res.status(statusCode).json({
       success: false,

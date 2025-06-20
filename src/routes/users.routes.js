@@ -85,19 +85,19 @@ const updateProfileValidations = [
 ]
 
 // Rutas públicas (sin autenticación)
-router.post('/register', 
+router.post('/register',
   createUserValidations,
   validateRequest,
   usersController.createUser
 )
 
-router.post('/request-otp', 
+router.post('/request-otp',
   requestOtpValidations,
   validateRequest,
   usersController.requestOtp
 )
 
-router.post('/verify-otp', 
+router.post('/verify-otp',
   verifyOtpValidations,
   validateRequest,
   usersController.verifyOtp
@@ -108,10 +108,10 @@ router.use(authenticateUser)
 
 router.get('/profile', usersController.getUserProfile)
 
-router.patch('/profile', 
+router.patch('/profile',
   updateProfileValidations,
   validateRequest,
   usersController.updateUserProfile
 )
 
-module.exports = router 
+module.exports = router

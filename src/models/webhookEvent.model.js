@@ -1,5 +1,5 @@
-const { Model, DataTypes, Op } = require('sequelize');
-const { sequelize } = require('./db');
+const { Model, DataTypes, Op } = require('sequelize')
+const { sequelize } = require('./db')
 
 class WebhookEvent extends Model {}
 
@@ -92,6 +92,6 @@ WebhookEvent.init({
       fields: ['provider', 'processed_at']
     }
   ]
-});
+})
 
-module.exports = WebhookEvent; 
+module.exports = WebhookEvent

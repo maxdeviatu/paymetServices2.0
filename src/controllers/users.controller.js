@@ -12,7 +12,7 @@ class UsersController {
    * @param {Object} req - Request object
    * @param {Object} res - Response object
    */
-  async createUser(req, res) {
+  async createUser (req, res) {
     try {
       const {
         firstName,
@@ -77,11 +77,11 @@ class UsersController {
         }
       })
     } catch (error) {
-      logger.logError(error, { 
+      logger.logError(error, {
         operation: 'createUser',
-        email: req.body.email 
+        email: req.body.email
       })
-      
+
       res.status(400).json({
         success: false,
         message: error.message
@@ -94,7 +94,7 @@ class UsersController {
    * @param {Object} req - Request object
    * @param {Object} res - Response object
    */
-  async requestOtp(req, res) {
+  async requestOtp (req, res) {
     try {
       const { email } = req.body
 
@@ -126,11 +126,11 @@ class UsersController {
         }
       })
     } catch (error) {
-      logger.logError(error, { 
+      logger.logError(error, {
         operation: 'requestOtp',
-        email: req.body.email 
+        email: req.body.email
       })
-      
+
       res.status(500).json({
         success: false,
         message: 'Error interno del servidor'
@@ -143,7 +143,7 @@ class UsersController {
    * @param {Object} req - Request object
    * @param {Object} res - Response object
    */
-  async verifyOtp(req, res) {
+  async verifyOtp (req, res) {
     try {
       const { email, code } = req.body
 
@@ -190,11 +190,11 @@ class UsersController {
         }
       })
     } catch (error) {
-      logger.logError(error, { 
+      logger.logError(error, {
         operation: 'verifyOtp',
-        email: req.body.email 
+        email: req.body.email
       })
-      
+
       res.status(500).json({
         success: false,
         message: 'Error interno del servidor'
@@ -207,7 +207,7 @@ class UsersController {
    * @param {Object} req - Request object
    * @param {Object} res - Response object
    */
-  async getUserProfile(req, res) {
+  async getUserProfile (req, res) {
     try {
       const userId = req.user.id
       const user = await userService.getUserById(userId)
@@ -229,11 +229,11 @@ class UsersController {
         }
       })
     } catch (error) {
-      logger.logError(error, { 
+      logger.logError(error, {
         operation: 'getUserProfile',
-        userId: req.user.id 
+        userId: req.user.id
       })
-      
+
       res.status(500).json({
         success: false,
         message: 'Error interno del servidor'
@@ -246,7 +246,7 @@ class UsersController {
    * @param {Object} req - Request object
    * @param {Object} res - Response object
    */
-  async updateUserProfile(req, res) {
+  async updateUserProfile (req, res) {
     try {
       const userId = req.user.id
       const {
@@ -258,7 +258,7 @@ class UsersController {
 
       // Solo permitir actualizar ciertos campos
       const updateData = {}
-      
+
       if (firstName !== undefined) updateData.first_name = firstName.trim()
       if (lastName !== undefined) updateData.last_name = lastName.trim()
       if (phone !== undefined) updateData.phone = phone?.trim() || null
@@ -289,11 +289,11 @@ class UsersController {
         }
       })
     } catch (error) {
-      logger.logError(error, { 
+      logger.logError(error, {
         operation: 'updateUserProfile',
-        userId: req.user.id 
+        userId: req.user.id
       })
-      
+
       res.status(400).json({
         success: false,
         message: error.message
@@ -302,4 +302,4 @@ class UsersController {
   }
 }
 
-module.exports = new UsersController() 
+module.exports = new UsersController()

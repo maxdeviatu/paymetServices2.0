@@ -22,7 +22,7 @@ const orderCreationLimiter = rateLimit({
       userAgent: req.get('User-Agent'),
       endpoint: req.path
     })
-    
+
     res.status(429).json({
       success: false,
       message: 'Demasiadas órdenes creadas desde esta IP. Intenta nuevamente en 15 minutos.',
@@ -53,7 +53,7 @@ const paymentLimiter = rateLimit({
       endpoint: req.path,
       orderId: req.params.orderId
     })
-    
+
     res.status(429).json({
       success: false,
       message: 'Demasiados intentos de pago desde esta IP. Intenta nuevamente en 5 minutos.',
@@ -87,7 +87,7 @@ const generalLimiter = rateLimit({
       userAgent: req.get('User-Agent'),
       endpoint: req.path
     })
-    
+
     res.status(429).json({
       success: false,
       message: 'Demasiadas solicitudes desde esta IP. Intenta nuevamente más tarde.',
@@ -106,8 +106,8 @@ const orderLookupSlowDown = slowDown({
   delayAfter: 5, // allow 5 requests per windowMs without delay
   delayMs: (used, req) => {
     // Add 500ms of delay per request after delayAfter
-    const delayAfter = req.slowDown.limit;
-    return (used - delayAfter) * 500;
+    const delayAfter = req.slowDown.limit
+    return (used - delayAfter) * 500
   },
   maxDelayMs: 20000, // max delay of 20 seconds
   skipFailedRequests: true,
@@ -135,7 +135,7 @@ const webhookLimiter = rateLimit({
       userAgent: req.get('User-Agent'),
       endpoint: req.path
     })
-    
+
     res.status(429).json({
       success: false,
       message: 'Webhook rate limit exceeded',

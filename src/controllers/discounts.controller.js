@@ -7,10 +7,10 @@ class DiscountsController {
   /**
    * Crear un nuevo descuento
    */
-  async createDiscount(req, res) {
+  async createDiscount (req, res) {
     try {
       const discount = await discountService.createDiscount(req.body)
-      
+
       return res.status(201).json({
         success: true,
         data: discount,
@@ -27,20 +27,20 @@ class DiscountsController {
   /**
    * Obtener todos los descuentos
    */
-  async getDiscounts(req, res) {
+  async getDiscounts (req, res) {
     try {
       const page = parseInt(req.query.page) || 1
       const limit = parseInt(req.query.limit) || 20
       const onlyActive = req.query.active === 'true'
       const onlyValid = req.query.valid === 'true'
-      
+
       const result = await discountService.listDiscounts({
         onlyActive,
         onlyValid,
         page,
         limit
       })
-      
+
       return res.status(200).json({
         success: true,
         data: result.discounts,
@@ -57,11 +57,11 @@ class DiscountsController {
   /**
    * Obtener un descuento por ID
    */
-  async getDiscountById(req, res) {
+  async getDiscountById (req, res) {
     try {
       const { id } = req.params
       const discount = await discountService.getDiscountById(id)
-      
+
       return res.status(200).json({
         success: true,
         data: discount
@@ -77,11 +77,11 @@ class DiscountsController {
   /**
    * Actualizar un descuento
    */
-  async updateDiscount(req, res) {
+  async updateDiscount (req, res) {
     try {
       const { id } = req.params
       const discount = await discountService.updateDiscount(id, req.body)
-      
+
       return res.status(200).json({
         success: true,
         data: discount,
@@ -98,11 +98,11 @@ class DiscountsController {
   /**
    * Cambiar el estado de un descuento (activo/inactivo)
    */
-  async toggleDiscountStatus(req, res) {
+  async toggleDiscountStatus (req, res) {
     try {
       const { id } = req.params
       const discount = await discountService.toggleDiscountStatus(id)
-      
+
       return res.status(200).json({
         success: true,
         data: discount,

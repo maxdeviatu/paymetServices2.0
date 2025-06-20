@@ -11,13 +11,13 @@ class ProductService {
    * @param {Object} productData - Datos del producto
    * @returns {Promise<Product>} Producto creado
    */
-  async createProduct(productData) {
+  async createProduct (productData) {
     try {
-      logger.logBusiness('createProduct', { 
+      logger.logBusiness('createProduct', {
         name: productData.name,
-        productRef: productData.productRef 
+        productRef: productData.productRef
       })
-      
+
       // Verificar si ya existe un producto con la misma referencia
       const existingProduct = await Product.findOne({
         where: { productRef: productData.productRef }
@@ -31,16 +31,16 @@ class ProductService {
 
       // Crear el producto
       const product = await Product.create(productData)
-      logger.logBusiness('createProduct.success', { 
+      logger.logBusiness('createProduct.success', {
         id: product.id,
         name: product.name,
-        productRef: product.productRef 
+        productRef: product.productRef
       })
       return product
     } catch (error) {
-      logger.logError(error, { 
+      logger.logError(error, {
         operation: 'createProduct',
-        productRef: productData.productRef 
+        productRef: productData.productRef
       })
       throw error
     }
@@ -52,9 +52,9 @@ class ProductService {
    * @param {boolean} includeInactive - Incluir productos inactivos
    * @returns {Promise<Product>} Producto encontrado
    */
-  async getProductById(id, includeInactive = false) {
+  async getProductById (id, includeInactive = false) {
     const where = { id }
-    
+
     if (!includeInactive) {
       where.isActive = true
     }
@@ -79,9 +79,9 @@ class ProductService {
    * @param {boolean} includeInactive - Incluir productos inactivos
    * @returns {Promise<Product>} Producto encontrado
    */
-  async getProductByRef(productRef, includeInactive = false) {
+  async getProductByRef (productRef, includeInactive = false) {
     const where = { productRef }
-    
+
     if (!includeInactive) {
       where.isActive = true
     }
@@ -108,10 +108,10 @@ class ProductService {
    * @param {number} options.limit - Límite de resultados por página
    * @returns {Promise<Object>} Objeto con productos y metadatos de paginación
    */
-  async listProducts({ includeInactive = false, page = 1, limit = 20 }) {
+  async listProducts ({ includeInactive = false, page = 1, limit = 20 }) {
     try {
       logger.logBusiness('listProducts', { includeInactive, page, limit })
-      
+
       // Limitar a 100 como máximo si es público
       if (!includeInactive && limit > 100) {
         limit = 100
@@ -130,7 +130,7 @@ class ProductService {
         order: [['createdAt', 'DESC']]
       })
 
-      logger.logBusiness('listProducts.success', { 
+      logger.logBusiness('listProducts.success', {
         total: count,
         page,
         limit,
@@ -147,11 +147,11 @@ class ProductService {
         }
       }
     } catch (error) {
-      logger.logError(error, { 
+      logger.logError(error, {
         operation: 'listProducts',
         includeInactive,
         page,
-        limit 
+        limit
       })
       throw error
     }
@@ -163,13 +163,13 @@ class ProductService {
    * @param {Object} productData - Datos a actualizar
    * @returns {Promise<Product>} Producto actualizado
    */
-  async updateProduct(id, productData) {
+  async updateProduct (id, productData) {
     const product = await this.getProductById(id, true)
 
     // Si se está cambiando la referencia, verificar que no exista otra igual
     if (productData.productRef && productData.productRef !== product.productRef) {
       const existingProduct = await Product.findOne({
-        where: { 
+        where: {
           productRef: productData.productRef,
           id: { [Op.ne]: id }
         }
@@ -190,7 +190,7 @@ class ProductService {
    * @param {number} id - ID del producto
    * @returns {Promise<Product>} Producto actualizado
    */
-  async toggleProductStatus(id) {
+  async toggleProductStatus (id) {
     const product = await this.getProductById(id, true)
     await product.update({ isActive: !product.isActive })
     return product
@@ -202,9 +202,9 @@ class ProductService {
    * @param {number} discountId - ID del descuento
    * @returns {Promise<Product>} Producto actualizado
    */
-  async updateProductDiscount(id, discountId) {
+  async updateProductDiscount (id, discountId) {
     const product = await this.getProductById(id, true)
-    
+
     // Si discountId es null, eliminar el descuento
     if (discountId === null) {
       await product.update({
@@ -242,7 +242,7 @@ class ProductService {
    * @param {number} id - ID del producto
    * @returns {Promise<boolean>} true si se eliminó correctamente
    */
-  async deleteProduct(id) {
+  async deleteProduct (id) {
     const product = await this.getProductById(id, true)
     await product.destroy()
     return true

@@ -5,9 +5,9 @@
 
 // Mapeo de roles a nivel de jerarquía
 const ROLE_HIERARCHY = {
-  'READ_ONLY': 1,
-  'EDITOR': 2,
-  'SUPER_ADMIN': 3
+  READ_ONLY: 1,
+  EDITOR: 2,
+  SUPER_ADMIN: 3
 }
 
 /**

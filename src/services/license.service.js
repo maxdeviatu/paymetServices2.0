@@ -5,7 +5,7 @@ const logger = require('../config/logger')
 /**
  * Create a new license
  */
-async function create(data) {
+async function create (data) {
   try {
     logger.logBusiness('createLicense', {
       productRef: data.productRef,
@@ -46,7 +46,7 @@ async function create(data) {
 /**
  * Update an existing license
  */
-async function update(id, data) {
+async function update (id, data) {
   try {
     logger.logBusiness('updateLicense', { id, data })
 
@@ -85,7 +85,7 @@ async function update(id, data) {
 /**
  * Annul a license by licenseKey
  */
-async function annul(code, actorId) {
+async function annul (code, actorId) {
   try {
     logger.logBusiness('annulLicense', { code, actorId })
 
@@ -129,7 +129,7 @@ async function annul(code, actorId) {
 /**
  * Return a license to stock
  */
-async function returnToStock(code) {
+async function returnToStock (code) {
   try {
     logger.logBusiness('returnLicenseToStock', { code })
 
@@ -170,7 +170,7 @@ async function returnToStock(code) {
 /**
  * Bulk import licenses from CSV data
  */
-async function bulkImport(rows) {
+async function bulkImport (rows) {
   try {
     logger.logBusiness('bulkImportLicenses', {
       totalRows: rows.length
@@ -178,7 +178,7 @@ async function bulkImport(rows) {
 
     // Get unique product references from the CSV
     const uniqueProductRefs = [...new Set(rows.map(row => row.productRef))]
-    
+
     // Verify all products exist and support licenses
     const products = await Product.findAll({
       where: { productRef: uniqueProductRefs },
@@ -188,14 +188,14 @@ async function bulkImport(rows) {
     // Check for missing products
     const foundProductRefs = products.map(p => p.productRef)
     const missingProductRefs = uniqueProductRefs.filter(ref => !foundProductRefs.includes(ref))
-    
+
     if (missingProductRefs.length > 0) {
       throw new Error(`Products not found: ${missingProductRefs.join(', ')}`)
     }
 
     // Check for products that don't support licenses
     const nonLicenseProducts = products.filter(p => !p.license_type).map(p => p.productRef)
-    
+
     if (nonLicenseProducts.length > 0) {
       throw new Error(`Products do not support licenses: ${nonLicenseProducts.join(', ')}. Set license_type to true first.`)
     }
@@ -222,7 +222,7 @@ async function bulkImport(rows) {
 /**
  * Get all licenses with optional filters
  */
-async function getAll(filters = {}) {
+async function getAll (filters = {}) {
   try {
     logger.logBusiness('getAllLicenses', { filters })
 
@@ -249,7 +249,7 @@ async function getAll(filters = {}) {
 /**
  * Get license by ID
  */
-async function getById(id) {
+async function getById (id) {
   try {
     logger.logBusiness('getLicenseById', { id })
 

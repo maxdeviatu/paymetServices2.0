@@ -23,14 +23,14 @@ router.get('/', discountsController.getDiscounts)
 router.get('/:id', discountsController.getDiscountById)
 
 // EDITOR puede crear y actualizar descuentos
-router.post('/', 
+router.post('/',
   requireRole('EDITOR'),
   discountValidations,
   validateRequest,
   discountsController.createDiscount
 )
 
-router.put('/:id', 
+router.put('/:id',
   requireRole('EDITOR'),
   discountValidations,
   validateRequest,
@@ -38,7 +38,7 @@ router.put('/:id',
 )
 
 // EDITOR puede activar/desactivar descuentos
-router.patch('/:id/status', 
+router.patch('/:id/status',
   requireRole('EDITOR'),
   discountsController.toggleDiscountStatus
 )

@@ -4,14 +4,14 @@ const logger = require('../../../config/logger')
  * Mock payment provider for testing and development
  */
 class MockPaymentProvider {
-  constructor() {
+  constructor () {
     this.name = 'mock'
   }
 
   /**
    * Create payment intent
    */
-  async createIntent({ order, transaction }) {
+  async createIntent ({ order, transaction }) {
     try {
       logger.logBusiness('payment:intent', {
         orderId: order.id,
@@ -22,7 +22,7 @@ class MockPaymentProvider {
 
       // Simulate gateway reference
       const gatewayRef = `mock-${order.id}-${transaction.id}-${Date.now()}`
-      
+
       // Create mock payment URL
       const redirectUrl = `http://localhost:3000/mock-payment/${gatewayRef}?amount=${transaction.amount}&currency=${transaction.currency}`
 
@@ -48,10 +48,10 @@ class MockPaymentProvider {
   /**
    * Parse webhook payload
    */
-  parseWebhook(req) {
+  parseWebhook (req) {
     try {
       const { body, headers } = req
-      
+
       // Mock webhook structure
       const webhook = {
         gatewayRef: body.reference || body.gatewayRef,
@@ -90,7 +90,7 @@ class MockPaymentProvider {
   /**
    * Validate webhook signature (mock implementation)
    */
-  validateSignature(signature, payload) {
+  validateSignature (signature, payload) {
     // In real implementation, this would validate against provider's secret
     // For mock, we just check if signature exists
     return signature && signature.length > 0
@@ -99,7 +99,7 @@ class MockPaymentProvider {
   /**
    * Refund transaction
    */
-  async refund({ transaction, amount, reason }) {
+  async refund ({ transaction, amount, reason }) {
     try {
       logger.logBusiness('payment:refund', {
         transactionId: transaction.id,
@@ -110,7 +110,7 @@ class MockPaymentProvider {
 
       // Simulate refund processing
       const refundRef = `refund-${transaction.gatewayRef}-${Date.now()}`
-      
+
       return {
         refundRef,
         status: 'REFUNDED',
@@ -134,7 +134,7 @@ class MockPaymentProvider {
   /**
    * Get transaction status from gateway
    */
-  async getTransactionStatus(gatewayRef) {
+  async getTransactionStatus (gatewayRef) {
     try {
       // Mock status check
       return {

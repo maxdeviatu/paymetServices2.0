@@ -7,7 +7,7 @@ const logger = require('../config/logger')
 exports.getAll = async (req, res) => {
   try {
     const filters = {}
-    
+
     // Add query filters if provided
     if (req.query.status) {
       filters.status = req.query.status
@@ -17,7 +17,7 @@ exports.getAll = async (req, res) => {
     }
 
     const licenses = await service.getAll(filters)
-    
+
     res.json({
       success: true,
       data: licenses,
@@ -41,7 +41,7 @@ exports.getAll = async (req, res) => {
 exports.getById = async (req, res) => {
   try {
     const license = await service.getById(req.params.id)
-    
+
     res.json({
       success: true,
       data: license
@@ -51,7 +51,7 @@ exports.getById = async (req, res) => {
       operation: 'getLicenseById',
       id: req.params.id
     })
-    
+
     const statusCode = error.message === 'License not found' ? 404 : 500
     res.status(statusCode).json({
       success: false,
@@ -66,7 +66,7 @@ exports.getById = async (req, res) => {
 exports.create = async (req, res) => {
   try {
     const license = await service.create(req.body)
-    
+
     res.status(201).json({
       success: true,
       data: license,
@@ -90,7 +90,7 @@ exports.create = async (req, res) => {
 exports.update = async (req, res) => {
   try {
     const license = await service.update(req.params.id, req.body)
-    
+
     res.json({
       success: true,
       data: license,
@@ -102,7 +102,7 @@ exports.update = async (req, res) => {
       id: req.params.id,
       body: req.body
     })
-    
+
     const statusCode = error.message === 'License not found' ? 404 : 500
     res.status(statusCode).json({
       success: false,
@@ -117,14 +117,14 @@ exports.update = async (req, res) => {
 exports.delete = async (req, res) => {
   try {
     await service.update(req.params.id, { status: 'ANNULLED' })
-    
+
     res.status(204).send()
   } catch (error) {
     logger.logError(error, {
       operation: 'deleteLicense',
       id: req.params.id
     })
-    
+
     const statusCode = error.message === 'License not found' ? 404 : 500
     res.status(statusCode).json({
       success: false,
@@ -139,7 +139,7 @@ exports.delete = async (req, res) => {
 exports.annul = async (req, res) => {
   try {
     const license = await service.annul(req.params.code, req.admin?.id)
-    
+
     res.json({
       success: true,
       data: license,
@@ -164,7 +164,7 @@ exports.annul = async (req, res) => {
 exports.return = async (req, res) => {
   try {
     const license = await service.returnToStock(req.params.code)
-    
+
     res.json({
       success: true,
       data: license,
@@ -188,11 +188,11 @@ exports.return = async (req, res) => {
 exports.templateCsv = (req, res) => {
   try {
     const csvTemplate = 'productRef,licenseKey,instructions\nSOFT-PRO-1Y,AAA-BBB-CCC-111,https://example.com/instructions\nSOFT-PRO-1Y,AAA-BBB-CCC-222,Follow setup guide at our website\n'
-    
+
     res.attachment('licenses-template.csv')
     res.type('text/csv')
     res.send(csvTemplate)
-    
+
     logger.logBusiness('downloadTemplate', {
       adminId: req.admin?.id
     })
@@ -222,7 +222,7 @@ exports.bulkUpload = async (req, res) => {
     // Parse CSV using csv-parse/sync
     const csv = require('csv-parse/sync')
     const csvContent = req.file.buffer.toString('utf8')
-    
+
     const rows = csv.parse(csvContent, {
       columns: true,
       trim: true,
@@ -240,7 +240,7 @@ exports.bulkUpload = async (req, res) => {
     const requiredColumns = ['productRef', 'licenseKey']
     const firstRow = rows[0]
     const missingColumns = requiredColumns.filter(col => !(col in firstRow))
-    
+
     if (missingColumns.length > 0) {
       return res.status(400).json({
         success: false,
@@ -249,7 +249,7 @@ exports.bulkUpload = async (req, res) => {
     }
 
     const result = await service.bulkImport(rows)
-    
+
     res.status(201).json({
       success: true,
       message: `Successfully imported ${result.length} licenses`,

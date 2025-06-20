@@ -69,7 +69,7 @@ logger.logError = (error, context = {}) => {
     stack: error.stack,
     ...context
   }
-  
+
   if (process.env.NODE_ENV === 'development') {
     logger.error('Error detallado:', errorInfo)
   } else {

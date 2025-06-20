@@ -1,17 +1,17 @@
-const { Product, License, sequelize } = require('../models');
-const logger = require('../config/logger');
+const { Product, License, sequelize } = require('../models')
+const logger = require('../config/logger')
 
-async function generateLicenseKey(productRef) {
-  const timestamp = Date.now().toString(36);
-  const random = Math.random().toString(36).substring(2, 8);
-  return `${productRef}-${timestamp}-${random}`.toUpperCase();
+async function generateLicenseKey (productRef) {
+  const timestamp = Date.now().toString(36)
+  const random = Math.random().toString(36).substring(2, 8)
+  return `${productRef}-${timestamp}-${random}`.toUpperCase()
 }
 
-async function initializeProducts() {
-  const t = await sequelize.transaction();
+async function initializeProducts () {
+  const t = await sequelize.transaction()
 
   try {
-    logger.info('🚀 Iniciando carga de productos y licencias...');
+    logger.info('🚀 Iniciando carga de productos y licencias...')
 
     // Producto 1: Curso Básico
     const cursoBasico = await Product.create({
@@ -23,22 +23,22 @@ async function initializeProducts() {
       features: 'Acceso a videos, ejercicios prácticos, certificado de finalización',
       license_type: true,
       isActive: true
-    }, { transaction: t });
+    }, { transaction: t })
 
-    logger.info('✅ Producto creado:', cursoBasico.productRef);
+    logger.info('✅ Producto creado:', cursoBasico.productRef)
 
     // Crear 3 licencias para el curso básico
     for (let i = 0; i < 3; i++) {
-      const licenseKey = await generateLicenseKey(cursoBasico.productRef);
+      const licenseKey = await generateLicenseKey(cursoBasico.productRef)
       await License.create({
         productRef: cursoBasico.productRef,
         licenseKey,
         status: 'AVAILABLE',
         instructions: 'Accede a la plataforma con tu email y usa este código para activar tu licencia'
-      }, { transaction: t });
+      }, { transaction: t })
     }
 
-    logger.info('✅ Licencias creadas para:', cursoBasico.productRef);
+    logger.info('✅ Licencias creadas para:', cursoBasico.productRef)
 
     // Producto 2: Curso Avanzado
     const cursoAvanzado = await Product.create({
@@ -50,25 +50,25 @@ async function initializeProducts() {
       features: 'Acceso a videos, proyectos prácticos, mentoría personalizada, certificado de finalización',
       license_type: true,
       isActive: true
-    }, { transaction: t });
+    }, { transaction: t })
 
-    logger.info('✅ Producto creado:', cursoAvanzado.productRef);
+    logger.info('✅ Producto creado:', cursoAvanzado.productRef)
 
     // Crear 3 licencias para el curso avanzado
     for (let i = 0; i < 3; i++) {
-      const licenseKey = await generateLicenseKey(cursoAvanzado.productRef);
+      const licenseKey = await generateLicenseKey(cursoAvanzado.productRef)
       await License.create({
         productRef: cursoAvanzado.productRef,
         licenseKey,
         status: 'AVAILABLE',
         instructions: 'Accede a la plataforma con tu email y usa este código para activar tu licencia'
-      }, { transaction: t });
+      }, { transaction: t })
     }
 
-    logger.info('✅ Licencias creadas para:', cursoAvanzado.productRef);
+    logger.info('✅ Licencias creadas para:', cursoAvanzado.productRef)
 
-    await t.commit();
-    logger.info('🎉 Inicialización completada exitosamente!');
+    await t.commit()
+    logger.info('🎉 Inicialización completada exitosamente!')
 
     // Mostrar resumen
     const products = await Product.findAll({
@@ -76,32 +76,31 @@ async function initializeProducts() {
         model: License,
         as: 'licenses'
       }]
-    });
+    })
 
     products.forEach(product => {
-      logger.info(`\n📦 Producto: ${product.name}`);
-      logger.info(`   Referencia: ${product.productRef}`);
-      logger.info(`   Precio: ${product.price} ${product.currency}`);
-      logger.info(`   Licencias disponibles: ${product.licenses.length}`);
+      logger.info(`\n📦 Producto: ${product.name}`)
+      logger.info(`   Referencia: ${product.productRef}`)
+      logger.info(`   Precio: ${product.price} ${product.currency}`)
+      logger.info(`   Licencias disponibles: ${product.licenses.length}`)
       product.licenses.forEach(license => {
-        logger.info(`   - ${license.licenseKey} (${license.status})`);
-      });
-    });
-
+        logger.info(`   - ${license.licenseKey} (${license.status})`)
+      })
+    })
   } catch (error) {
-    await t.rollback();
-    logger.error('❌ Error durante la inicialización:', error);
-    throw error;
+    await t.rollback()
+    logger.error('❌ Error durante la inicialización:', error)
+    throw error
   }
 }
 
 // Ejecutar el script
 initializeProducts()
   .then(() => {
-    logger.info('✨ Script ejecutado correctamente');
-    process.exit(0);
+    logger.info('✨ Script ejecutado correctamente')
+    process.exit(0)
   })
   .catch(error => {
-    logger.error('❌ Error en la ejecución del script:', error);
-    process.exit(1);
-  }); 
+    logger.error('❌ Error en la ejecución del script:', error)
+    process.exit(1)
+  })

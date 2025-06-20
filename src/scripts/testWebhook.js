@@ -1,14 +1,14 @@
-const crypto = require('crypto');
-const axios = require('axios');
+const crypto = require('crypto')
+const axios = require('axios')
 
 /**
  * Script para probar el webhook de Cobre con firma correcta
  */
 class WebhookTester {
-  constructor() {
-    this.webhookSecret = process.env.COBRE_WEBHOOK_SECRET || 'c50f8d56adf7d044f9b5b1f57b0f2e12f134061a267397fe3554baf12b52e74c';
-    this.webhookUrl = process.env.COBRE_WEBHOOK_URL || 'http://localhost:3000/api/webhooks/cobre';
-    this.uniqueTransactionId = `mm_test_${Date.now()}`; // Generar ID único para cada test
+  constructor () {
+    this.webhookSecret = process.env.COBRE_WEBHOOK_SECRET || 'c50f8d56adf7d044f9b5b1f57b0f2e12f134061a267397fe3554baf12b52e74c'
+    this.webhookUrl = process.env.COBRE_WEBHOOK_URL || 'http://localhost:3000/api/webhooks/cobre'
+    this.uniqueTransactionId = `mm_test_${Date.now()}` // Generar ID único para cada test
   }
 
   /**
@@ -17,21 +17,21 @@ class WebhookTester {
    * @param {string} body - Body JSON del webhook
    * @returns {string} - Firma hexadecimal
    */
-  generateSignature(timestamp, body) {
-    const data = `${timestamp}.${body}`;
+  generateSignature (timestamp, body) {
+    const data = `${timestamp}.${body}`
     return crypto
       .createHmac('sha256', this.webhookSecret)
       .update(data, 'utf8')
-      .digest('hex');
+      .digest('hex')
   }
 
   /**
    * Crea un payload de webhook de Cobre realista
    * @returns {Object} - Payload del webhook
    */
-  createWebhookPayload() {
-    const now = new Date().toISOString();
-    
+  createWebhookPayload () {
+    const now = new Date().toISOString()
+
     return {
       id: `ev_test_${Date.now()}`,
       event_key: 'accounts.balance.credit',
@@ -55,56 +55,55 @@ class WebhookTester {
         current_balance: 250000,
         credit_debit_type: 'credit'
       }
-    };
+    }
   }
 
   /**
    * Envía el webhook de prueba
    * @returns {Promise<void>}
    */
-  async sendTestWebhook() {
+  async sendTestWebhook () {
     try {
-      console.log('🧪 Testing webhook with correct signature...\n');
+      console.log('🧪 Testing webhook with correct signature...\n')
 
       // Crear payload
-      const payload = this.createWebhookPayload();
-      const bodyString = JSON.stringify(payload);
-      const timestamp = new Date().toISOString();
+      const payload = this.createWebhookPayload()
+      const bodyString = JSON.stringify(payload)
+      const timestamp = new Date().toISOString()
 
       // Generar firma
-      const signature = this.generateSignature(timestamp, bodyString);
+      const signature = this.generateSignature(timestamp, bodyString)
 
-      console.log('📋 Webhook details:');
-      console.log(`   URL: ${this.webhookUrl}`);
-      console.log(`   Event ID: ${payload.id}`);
-      console.log(`   Unique Transaction ID: ${this.uniqueTransactionId}`);
-      console.log(`   Amount: ${payload.content.amount} COP`);
-      console.log(`   Timestamp: ${timestamp}`);
-      console.log(`   Signature: ${signature.substring(0, 20)}...`);
-      console.log('');
+      console.log('📋 Webhook details:')
+      console.log(`   URL: ${this.webhookUrl}`)
+      console.log(`   Event ID: ${payload.id}`)
+      console.log(`   Unique Transaction ID: ${this.uniqueTransactionId}`)
+      console.log(`   Amount: ${payload.content.amount} COP`)
+      console.log(`   Timestamp: ${timestamp}`)
+      console.log(`   Signature: ${signature.substring(0, 20)}...`)
+      console.log('')
 
       // Enviar webhook
-      console.log('📤 Sending webhook...');
+      console.log('📤 Sending webhook...')
       const response = await axios.post(this.webhookUrl, bodyString, {
         headers: {
           'Content-Type': 'application/json',
-          'event_timestamp': timestamp,
-          'event_signature': signature,
+          event_timestamp: timestamp,
+          event_signature: signature,
           'User-Agent': 'Cobre-Webhook/1.0'
         }
-      });
+      })
 
-      console.log('✅ Webhook sent successfully!');
-      console.log(`   Status: ${response.status}`);
-      console.log(`   Response:`, response.data);
-
+      console.log('✅ Webhook sent successfully!')
+      console.log(`   Status: ${response.status}`)
+      console.log('   Response:', response.data)
     } catch (error) {
-      console.error('❌ Webhook test failed:');
+      console.error('❌ Webhook test failed:')
       if (error.response) {
-        console.error(`   Status: ${error.response.status}`);
-        console.error(`   Response:`, error.response.data);
+        console.error(`   Status: ${error.response.status}`)
+        console.error('   Response:', error.response.data)
       } else {
-        console.error(`   Error: ${error.message}`);
+        console.error(`   Error: ${error.message}`)
       }
     }
   }
@@ -112,44 +111,44 @@ class WebhookTester {
   /**
    * Prueba la validación de firma
    */
-  testSignatureValidation() {
-    console.log('🔍 Testing signature validation...\n');
+  testSignatureValidation () {
+    console.log('🔍 Testing signature validation...\n')
 
-    const timestamp = '2025-06-20T18:59:30Z';
-    const body = '{"test":"data"}';
-    const signature = this.generateSignature(timestamp, body);
+    const timestamp = '2025-06-20T18:59:30Z'
+    const body = '{"test":"data"}'
+    const signature = this.generateSignature(timestamp, body)
 
-    console.log('📋 Signature test:');
-    console.log(`   Timestamp: ${timestamp}`);
-    console.log(`   Body: ${body}`);
-    console.log(`   Data: ${timestamp}.${body}`);
-    console.log(`   Secret: ${this.webhookSecret.substring(0, 20)}...`);
-    console.log(`   Signature: ${signature}`);
-    console.log('');
+    console.log('📋 Signature test:')
+    console.log(`   Timestamp: ${timestamp}`)
+    console.log(`   Body: ${body}`)
+    console.log(`   Data: ${timestamp}.${body}`)
+    console.log(`   Secret: ${this.webhookSecret.substring(0, 20)}...`)
+    console.log(`   Signature: ${signature}`)
+    console.log('')
 
     // Verificar que la generación es consistente
-    const signature2 = this.generateSignature(timestamp, body);
-    const isConsistent = signature === signature2;
-    
-    console.log(`✅ Signature generation is consistent: ${isConsistent}`);
+    const signature2 = this.generateSignature(timestamp, body)
+    const isConsistent = signature === signature2
+
+    console.log(`✅ Signature generation is consistent: ${isConsistent}`)
   }
 }
 
 /**
  * Función principal
  */
-async function main() {
+async function main () {
   // Cargar variables de entorno
-  require('dotenv').config();
+  require('dotenv').config()
 
-  const tester = new WebhookTester();
+  const tester = new WebhookTester()
 
   // Verificar argumentos de línea de comandos
-  const args = process.argv.slice(2);
-  
+  const args = process.argv.slice(2)
+
   if (args.includes('--signature-test')) {
-    tester.testSignatureValidation();
-    return;
+    tester.testSignatureValidation()
+    return
   }
 
   if (args.includes('--help')) {
@@ -168,17 +167,17 @@ Environment variables:
 Examples:
   npm run webhook:test-cobre
   node src/scripts/testWebhook.js --signature-test
-    `);
-    return;
+    `)
+    return
   }
 
   // Enviar webhook de prueba
-  await tester.sendTestWebhook();
+  await tester.sendTestWebhook()
 }
 
 // Ejecutar si se llama directamente
 if (require.main === module) {
-  main().catch(console.error);
+  main().catch(console.error)
 }
 
-module.exports = WebhookTester;
+module.exports = WebhookTester

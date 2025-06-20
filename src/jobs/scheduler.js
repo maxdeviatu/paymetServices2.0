@@ -5,7 +5,7 @@ const OrderTimeoutJob = require('./orderTimeout')
  * Simple job scheduler for background tasks
  */
 class JobScheduler {
-  constructor() {
+  constructor () {
     this.jobs = new Map()
     this.intervals = new Map()
     this.running = false
@@ -14,11 +14,11 @@ class JobScheduler {
   /**
    * Register a job
    */
-  registerJob(job) {
+  registerJob (job) {
     try {
       const jobInstance = new job()
       this.jobs.set(jobInstance.name, jobInstance)
-      
+
       logger.info(`Job registered: ${jobInstance.name}`)
       return jobInstance
     } catch (error) {
@@ -30,7 +30,7 @@ class JobScheduler {
   /**
    * Start all registered jobs
    */
-  start() {
+  start () {
     if (this.running) {
       logger.warn('Job scheduler is already running')
       return
@@ -53,7 +53,7 @@ class JobScheduler {
   /**
    * Start a specific job
    */
-  startJob(jobName) {
+  startJob (jobName) {
     const job = this.jobs.get(jobName)
     if (!job) {
       throw new Error(`Job ${jobName} not found`)
@@ -63,7 +63,7 @@ class JobScheduler {
       // For now, use simple intervals instead of cron
       // In production, you might want to use node-cron or similar
       let intervalMs
-      
+
       switch (jobName) {
         case 'orderTimeout':
           intervalMs = 5 * 60 * 1000 // 5 minutes
@@ -81,7 +81,7 @@ class JobScheduler {
       }, intervalMs)
 
       this.intervals.set(jobName, interval)
-      
+
       logger.info(`Job ${jobName} started with ${intervalMs}ms interval`)
     } catch (error) {
       logger.error(`Failed to start job ${jobName}:`, error)
@@ -92,7 +92,7 @@ class JobScheduler {
   /**
    * Stop a specific job
    */
-  stopJob(jobName) {
+  stopJob (jobName) {
     const interval = this.intervals.get(jobName)
     if (interval) {
       clearInterval(interval)
@@ -104,7 +104,7 @@ class JobScheduler {
   /**
    * Stop all jobs
    */
-  stop() {
+  stop () {
     if (!this.running) {
       return
     }
@@ -122,7 +122,7 @@ class JobScheduler {
   /**
    * Run a job manually
    */
-  async runJob(jobName) {
+  async runJob (jobName) {
     const job = this.jobs.get(jobName)
     if (!job) {
       throw new Error(`Job ${jobName} not found`)
@@ -134,7 +134,7 @@ class JobScheduler {
   /**
    * Get job status
    */
-  getStatus() {
+  getStatus () {
     return {
       running: this.running,
       totalJobs: this.jobs.size,
@@ -147,13 +147,13 @@ class JobScheduler {
   /**
    * Graceful shutdown
    */
-  async shutdown() {
+  async shutdown () {
     logger.info('Shutting down job scheduler...')
     this.stop()
-    
+
     // Give running jobs time to complete
     await new Promise(resolve => setTimeout(resolve, 1000))
-    
+
     logger.info('Job scheduler shutdown complete')
   }
 }

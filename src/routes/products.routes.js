@@ -30,14 +30,14 @@ router.use(authenticate)
 router.get('/all', requireRole('READ_ONLY'), productsController.getAllProducts)
 
 // EDITOR puede crear y editar productos
-router.post('/', 
+router.post('/',
   requireRole('EDITOR'),
   productValidations,
   validateRequest,
   productsController.createProduct
 )
 
-router.put('/:id', 
+router.put('/:id',
   requireRole('EDITOR'),
   productValidations,
   validateRequest,
@@ -45,12 +45,12 @@ router.put('/:id',
 )
 
 // EDITOR puede cambiar estado y vincular descuentos
-router.patch('/:id/status', 
+router.patch('/:id/status',
   requireRole('EDITOR'),
   productsController.toggleProductStatus
 )
 
-router.patch('/:id/discount', 
+router.patch('/:id/discount',
   requireRole('EDITOR'),
   [
     body('discountId')
@@ -62,7 +62,7 @@ router.patch('/:id/discount',
 )
 
 // SUPER_ADMIN puede eliminar productos
-router.delete('/:id', 
+router.delete('/:id',
   requireRole('SUPER_ADMIN'),
   productsController.deleteProduct
 )

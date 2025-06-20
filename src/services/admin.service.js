@@ -14,10 +14,10 @@ class AdminService {
    * @param {Object} adminData - Datos del administrador
    * @returns {Promise<Admin>} Administrador creado
    */
-  async createAdmin(adminData) {
+  async createAdmin (adminData) {
     try {
       logger.logBusiness('createAdmin', { email: adminData.email })
-      
+
       // Verificar si ya existe un administrador con el mismo email
       const existingAdmin = await Admin.findOne({
         where: { email: adminData.email }
@@ -44,7 +44,7 @@ class AdminService {
    * @param {number} id - ID del administrador
    * @returns {Promise<Admin>} Administrador encontrado
    */
-  async getAdminById(id) {
+  async getAdminById (id) {
     const admin = await Admin.findByPk(id)
 
     if (!admin) {
@@ -62,10 +62,10 @@ class AdminService {
    * @param {number} options.limit - Límite de resultados por página
    * @returns {Promise<Object>} Objeto con administradores y metadatos de paginación
    */
-  async listAdmins({ onlyActive = false, page = 1, limit = 20 }) {
+  async listAdmins ({ onlyActive = false, page = 1, limit = 20 }) {
     try {
       logger.logBusiness('listAdmins', { onlyActive, page, limit })
-      
+
       const offset = (page - 1) * limit
       const where = onlyActive ? { isActive: true } : {}
 
@@ -77,11 +77,11 @@ class AdminService {
         order: [['createdAt', 'DESC']]
       })
 
-      logger.logBusiness('listAdmins.success', { 
-        total: count, 
-        page, 
-        limit, 
-        returned: rows.length 
+      logger.logBusiness('listAdmins.success', {
+        total: count,
+        page,
+        limit,
+        returned: rows.length
       })
 
       return {
@@ -105,13 +105,13 @@ class AdminService {
    * @param {Object} adminData - Datos a actualizar
    * @returns {Promise<Admin>} Administrador actualizado
    */
-  async updateAdmin(id, adminData) {
+  async updateAdmin (id, adminData) {
     const admin = await this.getAdminById(id)
 
     // Si se está cambiando el email, verificar que no exista otro igual
     if (adminData.email && adminData.email !== admin.email) {
       const existingAdmin = await Admin.findOne({
-        where: { 
+        where: {
           email: adminData.email,
           id: { [Op.ne]: id }
         }
@@ -124,11 +124,11 @@ class AdminService {
 
     // Actualizar el administrador
     await admin.update(adminData)
-    
+
     // Excluir passwordHash de la respuesta
     const result = admin.toJSON()
     delete result.passwordHash
-    
+
     return result
   }
 
@@ -137,14 +137,14 @@ class AdminService {
    * @param {number} id - ID del administrador
    * @returns {Promise<Admin>} Administrador actualizado
    */
-  async toggleAdminStatus(id) {
+  async toggleAdminStatus (id) {
     const admin = await this.getAdminById(id)
     await admin.update({ isActive: !admin.isActive })
-    
+
     // Excluir passwordHash de la respuesta
     const result = admin.toJSON()
     delete result.passwordHash
-    
+
     return result
   }
 
@@ -153,7 +153,7 @@ class AdminService {
    * @param {number} id - ID del administrador
    * @returns {Promise<boolean>} true si se eliminó correctamente
    */
-  async deleteAdmin(id) {
+  async deleteAdmin (id) {
     const admin = await this.getAdminById(id)
     await admin.destroy()
     return true
@@ -165,10 +165,10 @@ class AdminService {
    * @param {string} password - Contraseña del administrador
    * @returns {Promise<Object>} Objeto con el token y datos del administrador
    */
-  async login(email, password) {
+  async login (email, password) {
     try {
       logger.logBusiness('login', { email })
-      
+
       // Buscar el administrador por email
       const admin = await Admin.findOne({ where: { email, isActive: true } })
       if (!admin) {
@@ -213,15 +213,15 @@ class AdminService {
    * @param {string} newPassword - Nueva contraseña
    * @returns {Promise<boolean>} true si se cambió correctamente
    */
-  async resetPassword(id, newPassword) {
+  async resetPassword (id, newPassword) {
     const admin = await this.getAdminById(id)
-    
+
     // Hashear la nueva contraseña
     const passwordHash = await bcrypt.hash(newPassword, 10)
-    
+
     // Actualizar el administrador
     await admin.update({ passwordHash })
-    
+
     return true
   }
 }

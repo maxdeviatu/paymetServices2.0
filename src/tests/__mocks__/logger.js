@@ -7,4 +7,4 @@ const logger = {
   logError: jest.fn()
 }
 
-module.exports = logger 
+module.exports = logger

@@ -30,7 +30,7 @@ const sequelize = new Sequelize(
  * Inicializa la conexión a la base de datos y sincroniza los modelos
  * @returns {Promise<void>}
  */
-async function initDB() {
+async function initDB () {
   try {
     // Autenticar conexión
     await sequelize.authenticate()

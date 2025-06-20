@@ -63,4 +63,4 @@ const User = sequelize.define('User', {
 module.exports = {
   User,
   DOCUMENT_TYPES
-} 
+}

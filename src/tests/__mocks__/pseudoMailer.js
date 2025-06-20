@@ -3,4 +3,4 @@ const pseudoMailer = {
   sendWelcome: jest.fn().mockResolvedValue(true)
 }
 
-module.exports = pseudoMailer 
+module.exports = pseudoMailer

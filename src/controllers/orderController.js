@@ -1,22 +1,22 @@
-const Order = require('../models/order');
-const Transaction = require('../models/transaction');
-const CobreCheckout = require('../models/cobreCheckout');
-const cobreCheckoutService = require('../services/payment/providers/cobre/checkout');
-const logger = require('../config/logger');
-const sequelize = require('../config/database');
+const Order = require('../models/order')
+const Transaction = require('../models/transaction')
+const CobreCheckout = require('../models/cobreCheckout')
+const cobreCheckoutService = require('../services/payment/providers/cobre/checkout')
+const logger = require('../config/logger')
+const sequelize = require('../config/database')
 
 exports.createOrder = async (req, res) => {
-  const t = await sequelize.transaction();
-  
+  const t = await sequelize.transaction()
+
   try {
-    const { productRef, qty, customer, provider = 'mock' } = req.body;
+    const { productRef, qty, customer, provider = 'mock' } = req.body
 
     // Validar que el proveedor sea válido
     if (!['mock', 'cobre'].includes(provider)) {
       return res.status(400).json({
         success: false,
         message: 'Proveedor de pago no válido'
-      });
+      })
     }
 
     // Crear la orden
@@ -25,7 +25,7 @@ exports.createOrder = async (req, res) => {
       qty,
       customer,
       status: 'PENDING'
-    }, { transaction: t });
+    }, { transaction: t })
 
     // Crear la transacción
     const transaction = await Transaction.create({
@@ -34,9 +34,9 @@ exports.createOrder = async (req, res) => {
       status: 'PENDING',
       amount: order.grandTotal,
       currency: order.currency
-    }, { transaction: t });
+    }, { transaction: t })
 
-    let checkoutData = null;
+    let checkoutData = null
 
     // Si el proveedor es Cobre, crear el checkout
     if (provider === 'cobre') {
@@ -49,7 +49,7 @@ exports.createOrder = async (req, res) => {
           item: `Licencia Digital - ${order.productRef}`,
           description: `Pago de licencia digital - Orden #${order.id}`,
           redirectUrl: `${config.appUrl}/payment/complete?orderId=${order.id}`
-        });
+        })
 
         // Guardar el checkout en la base de datos
         await CobreCheckout.create({
@@ -60,7 +60,7 @@ exports.createOrder = async (req, res) => {
           currency: order.currency,
           validUntil: new Date(checkout.valid_until),
           metadata: checkout
-        }, { transaction: t });
+        }, { transaction: t })
 
         checkoutData = {
           id: transaction.id,
@@ -70,14 +70,14 @@ exports.createOrder = async (req, res) => {
           amount: order.grandTotal,
           currency: order.currency,
           paymentUrl: checkout.checkout_url
-        };
+        }
       } catch (error) {
-        logger.error('Error al crear checkout de Cobre:', error);
-        throw new Error('Error al crear el checkout de pago');
+        logger.error('Error al crear checkout de Cobre:', error)
+        throw new Error('Error al crear el checkout de pago')
       }
     }
 
-    await t.commit();
+    await t.commit()
 
     // Estructura de respuesta actualizada
     res.status(201).json({
@@ -95,7 +95,7 @@ exports.createOrder = async (req, res) => {
         grandTotal: order.grandTotal,
         currency: order.currency,
         status: order.status,
-        provider: provider,
+        provider,
         transaction: checkoutData || {
           id: transaction.id,
           gateway: provider,
@@ -104,14 +104,14 @@ exports.createOrder = async (req, res) => {
           currency: order.currency
         }
       }
-    });
+    })
   } catch (error) {
-    await t.rollback();
-    logger.error('Error creating order:', error);
+    await t.rollback()
+    logger.error('Error creating order:', error)
     res.status(500).json({
       success: false,
       message: 'Error creating order',
       error: error.message
-    });
+    })
   }
-}; 
+}

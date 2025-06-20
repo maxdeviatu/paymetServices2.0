@@ -68,11 +68,11 @@ const validateOrderCreation = [
       const birthDate = new Date(value)
       const today = new Date()
       const age = today.getFullYear() - birthDate.getFullYear()
-      
+
       if (age < 13 || age > 120) {
         throw new Error('La edad debe estar entre 13 y 120 años')
       }
-      
+
       return true
     }),
 
@@ -144,7 +144,7 @@ const validateTransactionLookup = [
  */
 const handleValidationErrors = (req, res, next) => {
   const errors = validationResult(req)
-  
+
   if (!errors.isEmpty()) {
     const errorDetails = errors.array().map(error => ({
       field: error.param,
@@ -177,19 +177,19 @@ const handleValidationErrors = (req, res, next) => {
 const securityHeaders = (req, res, next) => {
   // Remove server header
   res.removeHeader('X-Powered-By')
-  
+
   // Add security headers
   res.setHeader('X-Content-Type-Options', 'nosniff')
   res.setHeader('X-Frame-Options', 'DENY')
   res.setHeader('X-XSS-Protection', '1; mode=block')
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
-  
+
   // CORS headers for public endpoints
   res.setHeader('Access-Control-Allow-Origin', process.env.CORS_ORIGIN || '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
   res.setHeader('Access-Control-Max-Age', '86400') // 24 hours
-  
+
   next()
 }
 
@@ -198,7 +198,7 @@ const securityHeaders = (req, res, next) => {
  */
 const logPublicRequest = (req, res, next) => {
   const startTime = Date.now()
-  
+
   // Log request
   logger.logBusiness('api:public.request', {
     method: req.method,
@@ -212,7 +212,7 @@ const logPublicRequest = (req, res, next) => {
   // Log response when finished
   res.on('finish', () => {
     const duration = Date.now() - startTime
-    
+
     logger.logBusiness('api:public.response', {
       method: req.method,
       url: req.url,
@@ -239,11 +239,11 @@ const sanitizeInput = (req, res, next) => {
         .replace(/[<>]/g, '') // Remove < and > to prevent XSS
         .substring(0, 1000) // Limit string length
     }
-    
+
     if (Array.isArray(obj)) {
       return obj.map(sanitizeObject)
     }
-    
+
     if (obj && typeof obj === 'object') {
       const sanitized = {}
       for (const [key, value] of Object.entries(obj)) {
@@ -254,7 +254,7 @@ const sanitizeInput = (req, res, next) => {
       }
       return sanitized
     }
-    
+
     return obj
   }
 

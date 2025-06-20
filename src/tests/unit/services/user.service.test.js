@@ -52,11 +52,11 @@ describe('UserService', () => {
       // Verificar
       expect(User.findOne).toHaveBeenCalledTimes(2)
       expect(User.findOne).toHaveBeenNthCalledWith(1, { where: { email: userData.email } })
-      expect(User.findOne).toHaveBeenNthCalledWith(2, { 
-        where: { 
+      expect(User.findOne).toHaveBeenNthCalledWith(2, {
+        where: {
           document_type: userData.document_type,
-          document_number: userData.document_number 
-        } 
+          document_number: userData.document_number
+        }
       })
       expect(User.create).toHaveBeenCalledWith(userData)
       expect(result).toEqual(mockCreatedUser)
@@ -157,7 +157,7 @@ describe('UserService', () => {
     it('should update user successfully', async () => {
       // Configurar mocks
       User.findByPk.mockResolvedValue(mockUser)
-      
+
       // Simular que el objeto se actualiza in-situ
       mockUser.update.mockImplementation((data) => {
         Object.assign(mockUser, data)
@@ -198,7 +198,7 @@ describe('UserService', () => {
 
       // Verificar
       expect(typeof token).toBe('string')
-      
+
       // Decodificar el token para verificar el payload
       const decoded = jwt.verify(token, JWT.secret)
       expect(decoded.id).toBe(mockUser.id)
@@ -291,10 +291,10 @@ describe('UserService', () => {
       })
 
       // Ejecutar
-      const result = await userService.listUsers({ 
-        page: 1, 
-        limit: 10, 
-        search: 'John' 
+      const result = await userService.listUsers({
+        page: 1,
+        limit: 10,
+        search: 'John'
       })
 
       // Verificar
@@ -315,4 +315,4 @@ describe('UserService', () => {
       expect(result.users).toEqual([mockUsers[0]])
     })
   })
-}) 
+})

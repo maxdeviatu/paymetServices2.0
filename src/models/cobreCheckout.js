@@ -1,5 +1,5 @@
-const { Model, DataTypes } = require('sequelize');
-const { sequelize } = require('./db');
+const { Model, DataTypes } = require('sequelize')
+const { sequelize } = require('./db')
 
 class CobreCheckout extends Model {}
 
@@ -58,6 +58,6 @@ CobreCheckout.init({
   modelName: 'CobreCheckout',
   tableName: 'cobre_checkouts',
   timestamps: true
-});
+})
 
-module.exports = CobreCheckout; 
+module.exports = CobreCheckout

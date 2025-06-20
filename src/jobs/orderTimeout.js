@@ -6,7 +6,7 @@ const logger = require('../config/logger')
  * Order timeout job - cancels orders that have been pending too long
  */
 class OrderTimeoutJob {
-  constructor() {
+  constructor () {
     this.name = 'orderTimeout'
     this.timeoutMinutes = process.env.ORDER_TIMEOUT_MINUTES || 30
   }
@@ -14,7 +14,7 @@ class OrderTimeoutJob {
   /**
    * Execute the timeout job
    */
-  async execute() {
+  async execute () {
     try {
       logger.logBusiness('job:orderTimeout.start', {
         timeoutMinutes: this.timeoutMinutes
@@ -31,7 +31,7 @@ class OrderTimeoutJob {
           }
         },
         include: [
-          { 
+          {
             association: 'transactions',
             where: {
               status: { [Op.in]: ['CREATED', 'PENDING'] }
@@ -90,7 +90,7 @@ class OrderTimeoutJob {
   /**
    * Process a single expired order
    */
-  async processExpiredOrder(order) {
+  async processExpiredOrder (order) {
     return await sequelize.transaction(async (transaction) => {
       logger.logBusiness('order:timeout', {
         orderId: order.id,
@@ -152,14 +152,14 @@ class OrderTimeoutJob {
   /**
    * Run the job manually (for testing)
    */
-  async run() {
+  async run () {
     logger.info(`Starting ${this.name} job...`)
     const startTime = Date.now()
-    
+
     try {
       const result = await this.execute()
       const duration = Date.now() - startTime
-      
+
       logger.info(`${this.name} job completed in ${duration}ms`, result)
       return result
     } catch (error) {
@@ -172,7 +172,7 @@ class OrderTimeoutJob {
   /**
    * Get job configuration for cron scheduler
    */
-  getCronConfig() {
+  getCronConfig () {
     return {
       name: this.name,
       cronTime: '*/5 * * * *', // Every 5 minutes

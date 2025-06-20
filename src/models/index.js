@@ -15,44 +15,44 @@ Product.belongsTo(Discount, { foreignKey: 'discountId', as: 'discount' })
 Discount.hasMany(Product, { foreignKey: 'discountId', as: 'products' })
 
 // License associations
-License.belongsTo(Product, { 
-  foreignKey: 'productRef', 
+License.belongsTo(Product, {
+  foreignKey: 'productRef',
   targetKey: 'productRef',
   as: 'Product'
 })
-Product.hasMany(License, { 
-  foreignKey: 'productRef', 
+Product.hasMany(License, {
+  foreignKey: 'productRef',
   sourceKey: 'productRef',
   as: 'licenses'
 })
 
 // Order associations
-Order.belongsTo(User, { 
-  foreignKey: 'customerId', 
+Order.belongsTo(User, {
+  foreignKey: 'customerId',
   as: 'customer'
 })
-Order.belongsTo(Product, { 
-  foreignKey: 'productRef', 
+Order.belongsTo(Product, {
+  foreignKey: 'productRef',
   targetKey: 'productRef',
   as: 'product'
 })
-User.hasMany(Order, { 
-  foreignKey: 'customerId', 
+User.hasMany(Order, {
+  foreignKey: 'customerId',
   as: 'orders'
 })
-Product.hasMany(Order, { 
-  foreignKey: 'productRef', 
+Product.hasMany(Order, {
+  foreignKey: 'productRef',
   sourceKey: 'productRef',
   as: 'orders'
 })
 
 // Transaction associations
-Transaction.belongsTo(Order, { 
-  foreignKey: 'orderId', 
+Transaction.belongsTo(Order, {
+  foreignKey: 'orderId',
   as: 'order'
 })
-Order.hasMany(Transaction, { 
-  foreignKey: 'orderId', 
+Order.hasMany(Transaction, {
+  foreignKey: 'orderId',
   as: 'transactions'
 })
 

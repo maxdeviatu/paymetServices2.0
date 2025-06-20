@@ -14,14 +14,14 @@ class UserService {
    * @param {Object} userData - Datos del usuario
    * @returns {Promise<User>} Usuario creado
    */
-  async createUser(userData) {
+  async createUser (userData) {
     try {
-      logger.logBusiness('createUser', { 
+      logger.logBusiness('createUser', {
         email: userData.email,
         document_type: userData.document_type,
-        document_number: userData.document_number 
+        document_number: userData.document_number
       })
-      
+
       // Verificar si ya existe un usuario con el mismo email
       const existingUserByEmail = await User.findOne({
         where: { email: userData.email }
@@ -35,7 +35,7 @@ class UserService {
 
       // Verificar si ya existe un usuario con el mismo documento
       const existingUserByDocument = await User.findOne({
-        where: { 
+        where: {
           document_type: userData.document_type,
           document_number: userData.document_number
         }
@@ -43,37 +43,37 @@ class UserService {
 
       if (existingUserByDocument) {
         const error = new Error(`Ya existe un usuario con el documento ${userData.document_type} ${userData.document_number}`)
-        logger.logError(error, { 
+        logger.logError(error, {
           document_type: userData.document_type,
-          document_number: userData.document_number 
+          document_number: userData.document_number
         })
         throw error
       }
 
       // Crear el usuario
       const user = await User.create(userData)
-      
+
       // Enviar correo de bienvenida
       try {
         await pseudoMailer.sendWelcome(user.email, user.first_name)
       } catch (error) {
-        logger.warn('Error al enviar correo de bienvenida', { 
+        logger.warn('Error al enviar correo de bienvenida', {
           userId: user.id,
-          email: user.email 
+          email: user.email
         })
       }
 
-      logger.logBusiness('createUser.success', { 
+      logger.logBusiness('createUser.success', {
         id: user.id,
         email: user.email,
-        first_name: user.first_name 
+        first_name: user.first_name
       })
-      
+
       return user
     } catch (error) {
-      logger.logError(error, { 
+      logger.logError(error, {
         operation: 'createUser',
-        email: userData.email 
+        email: userData.email
       })
       throw error
     }
@@ -84,7 +84,7 @@ class UserService {
    * @param {number} id - ID del usuario
    * @returns {Promise<User>} Usuario encontrado
    */
-  async getUserById(id) {
+  async getUserById (id) {
     try {
       const user = await User.findByPk(id)
 
@@ -94,9 +94,9 @@ class UserService {
 
       return user
     } catch (error) {
-      logger.logError(error, { 
+      logger.logError(error, {
         operation: 'getUserById',
-        userId: id 
+        userId: id
       })
       throw error
     }
@@ -107,7 +107,7 @@ class UserService {
    * @param {string} email - Email del usuario
    * @returns {Promise<User>} Usuario encontrado
    */
-  async getUserByEmail(email) {
+  async getUserByEmail (email) {
     try {
       const user = await User.findOne({
         where: { email }
@@ -119,9 +119,9 @@ class UserService {
 
       return user
     } catch (error) {
-      logger.logError(error, { 
+      logger.logError(error, {
         operation: 'getUserByEmail',
-        email 
+        email
       })
       throw error
     }
@@ -133,14 +133,14 @@ class UserService {
    * @param {Object} userData - Datos a actualizar
    * @returns {Promise<User>} Usuario actualizado
    */
-  async updateUser(id, userData) {
+  async updateUser (id, userData) {
     try {
       const user = await this.getUserById(id)
 
       // Si se está cambiando el email, verificar que no exista otro usuario con el mismo
       if (userData.email && userData.email !== user.email) {
         const existingUser = await User.findOne({
-          where: { 
+          where: {
             email: userData.email,
             id: { [Op.ne]: id }
           }
@@ -152,13 +152,13 @@ class UserService {
       }
 
       // Si se está cambiando el documento, verificar que no exista otro usuario con el mismo
-      if ((userData.document_type || userData.document_number) && 
+      if ((userData.document_type || userData.document_number) &&
           (userData.document_type !== user.document_type || userData.document_number !== user.document_number)) {
         const document_type = userData.document_type || user.document_type
         const document_number = userData.document_number || user.document_number
-        
+
         const existingUser = await User.findOne({
-          where: { 
+          where: {
             document_type,
             document_number,
             id: { [Op.ne]: id }
@@ -172,17 +172,17 @@ class UserService {
 
       // Actualizar el usuario
       await user.update(userData)
-      
-      logger.logBusiness('updateUser.success', { 
+
+      logger.logBusiness('updateUser.success', {
         id: user.id,
-        email: user.email 
+        email: user.email
       })
-      
+
       return user
     } catch (error) {
-      logger.logError(error, { 
+      logger.logError(error, {
         operation: 'updateUser',
-        userId: id 
+        userId: id
       })
       throw error
     }
@@ -193,7 +193,7 @@ class UserService {
    * @param {User} user - Usuario para generar el token
    * @returns {string} Token JWT
    */
-  generateUserToken(user) {
+  generateUserToken (user) {
     const payload = {
       id: user.id,
       email: user.email,
@@ -208,16 +208,16 @@ class UserService {
    * @param {string} email - Email a verificar
    * @returns {Promise<boolean>} true si el usuario existe
    */
-  async userExistsByEmail(email) {
+  async userExistsByEmail (email) {
     try {
       const user = await User.findOne({
         where: { email }
       })
       return !!user
     } catch (error) {
-      logger.logError(error, { 
+      logger.logError(error, {
         operation: 'userExistsByEmail',
-        email 
+        email
       })
       return false
     }
@@ -228,10 +228,10 @@ class UserService {
    * @param {Object} options - Opciones de filtrado y paginación
    * @returns {Promise<Object>} Objeto con usuarios y metadatos de paginación
    */
-  async listUsers({ page = 1, limit = 20, search = '' }) {
+  async listUsers ({ page = 1, limit = 20, search = '' }) {
     try {
       logger.logBusiness('listUsers', { page, limit, search })
-      
+
       const offset = (page - 1) * limit
       const where = {}
 
@@ -253,7 +253,7 @@ class UserService {
         attributes: { exclude: [] } // Incluir todos los campos
       })
 
-      logger.logBusiness('listUsers.success', { 
+      logger.logBusiness('listUsers.success', {
         total: count,
         page,
         limit,
@@ -270,14 +270,14 @@ class UserService {
         }
       }
     } catch (error) {
-      logger.logError(error, { 
+      logger.logError(error, {
         operation: 'listUsers',
         page,
-        limit 
+        limit
       })
       throw error
     }
   }
 }
 
-module.exports = new UserService() 
+module.exports = new UserService()

@@ -10,4 +10,4 @@ module.exports = {
   ],
   verbose: true,
   setupFilesAfterEnv: ['./src/tests/setup.js']
-} 
+}

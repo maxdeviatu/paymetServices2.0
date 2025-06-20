@@ -358,4 +358,4 @@ describe('UsersController', () => {
       })
     })
   })
-}) 
+})

@@ -14,8 +14,8 @@ router.use(webhookLimiter)
 
 // Endpoint principal of webhooks (no authentication required - verified by signature)
 // Use express.raw() to preserve the original body for signature validation
-router.post('/:provider', 
-  express.raw({ type: 'application/json' }), 
+router.post('/:provider',
+  express.raw({ type: 'application/json' }),
   webhookController.handleWebhook.bind(webhookController)
 )
 
@@ -24,7 +24,7 @@ router.get('/:provider/health', webhookController.healthCheck.bind(webhookContro
 
 // Mock payment completion (for testing only)
 if (process.env.NODE_ENV === 'development') {
-  router.post('/mock-payment/:gatewayRef/complete', 
+  router.post('/mock-payment/:gatewayRef/complete',
     webhookController.mockPaymentComplete.bind(webhookController)
   )
 }
@@ -33,13 +33,13 @@ if (process.env.NODE_ENV === 'development') {
 router.use(authenticate)
 
 // Get webhook statistics (READ_ONLY+)
-router.get('/admin/statistics', 
+router.get('/admin/statistics',
   requireRole('READ_ONLY'),
   webhookController.getStatistics.bind(webhookController)
 )
 
 // Get webhook events with pagination (READ_ONLY+)
-router.get('/admin/events', 
+router.get('/admin/events',
   requireRole('READ_ONLY'),
   webhookController.getWebhookEvents.bind(webhookController)
 )

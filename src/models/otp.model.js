@@ -44,4 +44,4 @@ const OtpCode = sequelize.define('OtpCode', {
   ]
 })
 
-module.exports = OtpCode 
+module.exports = OtpCode

@@ -13,7 +13,7 @@ const CobreProvider = require('./providers/cobre')
  * Payment service factory and orchestrator
  */
 class PaymentService {
-  constructor() {
+  constructor () {
     this.providers = {
       mock: new MockProvider(),
       cobre: CobreProvider
@@ -26,22 +26,22 @@ class PaymentService {
   /**
    * Initialize all payment providers
    */
-  async initialize() {
+  async initialize () {
     if (this.initialized) {
       return
     }
 
     try {
       logger.info('🔍 Validando proveedores de pago...')
-      
+
       // Get list of available providers
       const availableProviders = Object.keys(this.providers).filter(name => name !== 'mock')
-      
+
       logger.info('📦 Proveedores de pago encontrados:')
       availableProviders.forEach(provider => {
         logger.info(`   - ${provider.charAt(0).toUpperCase() + provider.slice(1)}`)
       })
-      
+
       // Initialize each provider concurrently
       const initPromises = availableProviders.map(async (providerName) => {
         const provider = this.providers[providerName]
@@ -50,7 +50,7 @@ class PaymentService {
           try {
             await provider.authenticate()
             logger.info(`✅ ${providerName} authentication successful on startup`)
-            
+
             // Verificación adicional para Cobre
             if (providerName === 'cobre') {
               if (provider.isTokenValid && provider.isTokenValid()) {
@@ -59,7 +59,7 @@ class PaymentService {
                 logger.warn(`⚠️ ${providerName} token validation failed`)
               }
             }
-            
+
             return { provider: providerName, status: 'success' }
           } catch (error) {
             logger.error(`❌ Error inicializando ${providerName}:`, error.message)
@@ -70,27 +70,26 @@ class PaymentService {
       })
 
       const results = await Promise.allSettled(initPromises)
-      
+
       // Log initialization results
       const successful = results.filter(r => r.status === 'fulfilled' && r.value.status === 'success').length
       const failed = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && r.value.status === 'error')).length
-      
-      logger.info(`\n📊 Inicialización de proveedores completada:`)
+
+      logger.info('\n📊 Inicialización de proveedores completada:')
       logger.info(`   ✅ Exitosos: ${successful}`)
       if (failed > 0) {
         logger.info(`   ❌ Fallidos: ${failed}`)
       }
-      
+
       // Verificación final de estado de proveedores
-      logger.info(`\n🔍 Estado final de proveedores:`)
+      logger.info('\n🔍 Estado final de proveedores:')
       availableProviders.forEach(providerName => {
         const isReady = this.isProviderReady(providerName)
         const status = isReady ? '✅ Ready' : '❌ Not Ready'
         logger.info(`   ${providerName}: ${status}`)
       })
-      
+
       this.initialized = true
-      
     } catch (error) {
       logger.error('❌ Error durante la inicialización de proveedores:', error.message)
       throw error
@@ -100,7 +99,7 @@ class PaymentService {
   /**
    * Get list of available and initialized providers
    */
-  getAvailableProviders() {
+  getAvailableProviders () {
     return Object.keys(this.providers).filter(name => {
       const provider = this.providers[name]
       return provider && (name === 'mock' || this.isProviderReady(name))
@@ -110,39 +109,39 @@ class PaymentService {
   /**
    * Check if a provider is ready for use
    */
-  isProviderReady(providerName) {
+  isProviderReady (providerName) {
     const provider = this.providers[providerName]
     if (!provider) return false
-    
+
     // For providers with authentication, check if they have a valid token
     if (typeof provider.isTokenValid === 'function') {
       return provider.isTokenValid()
     }
-    
+
     return true
   }
 
   /**
    * Get payment provider instance
    */
-  getProvider(providerName) {
+  getProvider (providerName) {
     const provider = this.providers[providerName]
     if (!provider) {
       throw new Error(`Payment provider '${providerName}' not supported`)
     }
-    
+
     // Check if provider is ready
     if (!this.isProviderReady(providerName)) {
       throw new Error(`Payment provider '${providerName}' is not ready or authenticated`)
     }
-    
+
     return provider
   }
 
   /**
    * Create payment intent for order
    */
-  async createPaymentIntent(orderId, options = {}) {
+  async createPaymentIntent (orderId, options = {}) {
     try {
       logger.logBusiness('payment:createIntent', { orderId, options })
 
@@ -152,7 +151,7 @@ class PaymentService {
           lock: t.LOCK.UPDATE,
           transaction: t
         })
-        
+
         if (!order) {
           throw new Error('Order not found')
         }
@@ -167,16 +166,16 @@ class PaymentService {
           transaction: t
         })
 
-        // Get existing transactions separately  
+        // Get existing transactions separately
         const existingTransactions = await Transaction.findAll({
-          where: { 
+          where: {
             orderId: order.id,
             gateway: options.provider || 'mock',
             status: { [Op.in]: ['CREATED', 'PENDING'] }
           },
           transaction: t
         })
-        
+
         logger.logBusiness('payment:order.loaded', {
           orderId,
           orderFound: !!order,
@@ -187,7 +186,7 @@ class PaymentService {
 
         // Find or create transaction for the specified provider
         let transaction = existingTransactions?.[0]
-        
+
         if (!transaction) {
           // Create new transaction if none exists for this provider
           transaction = await Transaction.create({
@@ -217,7 +216,7 @@ class PaymentService {
         if (transaction.gateway === 'cobre' && intentResult.meta) {
           await CobreCheckout.create({
             transactionId: transaction.id,
-            checkoutId: intentResult.gatewayRef,
+            checkoutId: intentResult.meta.checkoutId,
             checkoutUrl: intentResult.redirectUrl,
             amount: transaction.amount,
             currency: transaction.currency,
@@ -225,10 +224,10 @@ class PaymentService {
             validUntil: new Date(intentResult.meta.validUntil),
             metadata: intentResult.meta
           }, { transaction: t })
-          
+
           logger.logBusiness('cobre:checkout.created', {
             transactionId: transaction.id,
-            checkoutId: intentResult.gatewayRef,
+            checkoutId: intentResult.meta.checkoutId,
             checkoutUrl: intentResult.redirectUrl
           })
         }
@@ -262,9 +261,9 @@ class PaymentService {
   /**
    * Process webhook from payment provider
    */
-  async processWebhook(providerName, req) {
+  async processWebhook (providerName, req) {
     try {
-      logger.logBusiness('payment:webhook.received', { 
+      logger.logBusiness('payment:webhook.received', {
         provider: providerName,
         headers: req.headers,
         bodyPreview: JSON.stringify(req.body).substring(0, 200)
@@ -281,7 +280,7 @@ class PaymentService {
             gateway: providerName,
             gatewayRef: webhookData.gatewayRef
           },
-          include: [{ 
+          include: [{
             association: 'order',
             include: [
               { association: 'product' },
@@ -356,7 +355,7 @@ class PaymentService {
   /**
    * Handle successful payment
    */
-  async handlePaymentSuccess(transaction, dbTransaction) {
+  async handlePaymentSuccess (transaction, dbTransaction) {
     try {
       const order = transaction.order
 
@@ -384,7 +383,7 @@ class PaymentService {
       // If product has licenses, start fulfillment process
       if (order.product && order.product.license_type) {
         const license = await this.reserveLicenseForOrder(order, dbTransaction)
-        
+
         // For digital products, complete immediately and send license
         await order.update({
           status: 'COMPLETED'
@@ -427,7 +426,7 @@ class PaymentService {
   /**
    * Handle payment failure
    */
-  async handlePaymentFailure(transaction, dbTransaction) {
+  async handlePaymentFailure (transaction, dbTransaction) {
     try {
       const order = transaction.order
 
@@ -465,7 +464,7 @@ class PaymentService {
   /**
    * Reserve license for paid order
    */
-  async reserveLicenseForOrder(order, dbTransaction) {
+  async reserveLicenseForOrder (order, dbTransaction) {
     try {
       const { License } = require('../../models')
 
@@ -510,19 +509,19 @@ class PaymentService {
   /**
    * Map webhook status to internal status
    */
-  mapWebhookStatus(webhookStatus) {
+  mapWebhookStatus (webhookStatus) {
     const statusMap = {
-      'PAID': 'PAID',
-      'SUCCESS': 'PAID',
-      'COMPLETED': 'PAID',
-      'APPROVED': 'PAID',
-      'FAILED': 'FAILED',
-      'CANCELLED': 'FAILED',
-      'CANCELED': 'FAILED',
-      'EXPIRED': 'FAILED',
-      'REJECTED': 'FAILED',
-      'PENDING': 'PENDING',
-      'PROCESSING': 'PENDING'
+      PAID: 'PAID',
+      SUCCESS: 'PAID',
+      COMPLETED: 'PAID',
+      APPROVED: 'PAID',
+      FAILED: 'FAILED',
+      CANCELLED: 'FAILED',
+      CANCELED: 'FAILED',
+      EXPIRED: 'FAILED',
+      REJECTED: 'FAILED',
+      PENDING: 'PENDING',
+      PROCESSING: 'PENDING'
     }
 
     return statusMap[webhookStatus?.toUpperCase()] || 'FAILED'
@@ -531,7 +530,7 @@ class PaymentService {
   /**
    * Get transaction status
    */
-  async getTransactionStatus(transactionId) {
+  async getTransactionStatus (transactionId) {
     try {
       const transaction = await Transaction.findByPk(transactionId, {
         include: [{ association: 'order' }]

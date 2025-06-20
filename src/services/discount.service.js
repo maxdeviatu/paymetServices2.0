@@ -11,9 +11,9 @@ class DiscountService {
    * @param {Object} discountData - Datos del descuento
    * @returns {Promise<Discount>} Descuento creado
    */
-  async createDiscount(discountData) {
+  async createDiscount (discountData) {
     try {
-      logger.logBusiness('createDiscount', { 
+      logger.logBusiness('createDiscount', {
         name: discountData.name,
         amount: discountData.amount,
         startDate: discountData.startDate,
@@ -23,7 +23,7 @@ class DiscountService {
       // Validar fechas
       if (new Date(discountData.startDate) >= new Date(discountData.endDate)) {
         const error = new Error('La fecha de inicio debe ser anterior a la fecha de fin')
-        logger.logError(error, { 
+        logger.logError(error, {
           startDate: discountData.startDate,
           endDate: discountData.endDate
         })
@@ -31,13 +31,13 @@ class DiscountService {
       }
 
       const discount = await Discount.create(discountData)
-      logger.logBusiness('createDiscount.success', { 
+      logger.logBusiness('createDiscount.success', {
         id: discount.id,
         name: discount.name
       })
       return discount
     } catch (error) {
-      logger.logError(error, { 
+      logger.logError(error, {
         operation: 'createDiscount',
         discountData
       })
@@ -50,10 +50,10 @@ class DiscountService {
    * @param {number} id - ID del descuento
    * @returns {Promise<Discount>} Descuento encontrado
    */
-  async getDiscountById(id) {
+  async getDiscountById (id) {
     try {
       logger.logBusiness('getDiscountById', { id })
-      
+
       const discount = await Discount.findByPk(id, {
         include: [{ model: Product, as: 'products' }]
       })
@@ -64,7 +64,7 @@ class DiscountService {
         throw error
       }
 
-      logger.logBusiness('getDiscountById.success', { 
+      logger.logBusiness('getDiscountById.success', {
         id: discount.id,
         name: discount.name
       })
@@ -84,10 +84,10 @@ class DiscountService {
    * @param {number} options.limit - Límite de resultados por página
    * @returns {Promise<Object>} Objeto con descuentos y metadatos de paginación
    */
-  async listDiscounts({ onlyActive = false, onlyValid = false, page = 1, limit = 20 }) {
+  async listDiscounts ({ onlyActive = false, onlyValid = false, page = 1, limit = 20 }) {
     try {
       logger.logBusiness('listDiscounts', { onlyActive, onlyValid, page, limit })
-      
+
       const offset = (page - 1) * limit
       let where = {}
 
@@ -112,7 +112,7 @@ class DiscountService {
         order: [['createdAt', 'DESC']]
       })
 
-      logger.logBusiness('listDiscounts.success', { 
+      logger.logBusiness('listDiscounts.success', {
         total: count,
         page,
         limit,
@@ -129,12 +129,12 @@ class DiscountService {
         }
       }
     } catch (error) {
-      logger.logError(error, { 
+      logger.logError(error, {
         operation: 'listDiscounts',
         onlyActive,
         onlyValid,
         page,
-        limit 
+        limit
       })
       throw error
     }
@@ -146,10 +146,10 @@ class DiscountService {
    * @param {Object} discountData - Datos a actualizar
    * @returns {Promise<Discount>} Descuento actualizado
    */
-  async updateDiscount(id, discountData) {
+  async updateDiscount (id, discountData) {
     try {
       logger.logBusiness('updateDiscount', { id, discountData })
-      
+
       const discount = await this.getDiscountById(id)
 
       // Si se están actualizando las fechas, validar
@@ -159,7 +159,7 @@ class DiscountService {
 
         if (startDate >= endDate) {
           const error = new Error('La fecha de inicio debe ser anterior a la fecha de fin')
-          logger.logError(error, { 
+          logger.logError(error, {
             startDate,
             endDate
           })
@@ -168,16 +168,16 @@ class DiscountService {
       }
 
       await discount.update(discountData)
-      logger.logBusiness('updateDiscount.success', { 
+      logger.logBusiness('updateDiscount.success', {
         id: discount.id,
         name: discount.name
       })
       return discount
     } catch (error) {
-      logger.logError(error, { 
+      logger.logError(error, {
         operation: 'updateDiscount',
         id,
-        discountData 
+        discountData
       })
       throw error
     }
@@ -188,10 +188,10 @@ class DiscountService {
    * @param {number} id - ID del descuento
    * @returns {Promise<Discount>} Descuento actualizado
    */
-  async toggleDiscountStatus(id) {
+  async toggleDiscountStatus (id) {
     try {
       logger.logBusiness('toggleDiscountStatus', { id })
-      
+
       const discount = await this.getDiscountById(id)
       await discount.update({ isActive: !discount.isActive })
 
@@ -203,7 +203,7 @@ class DiscountService {
         )
       }
 
-      logger.logBusiness('toggleDiscountStatus.success', { 
+      logger.logBusiness('toggleDiscountStatus.success', {
         id: discount.id,
         name: discount.name,
         isActive: discount.isActive
@@ -220,7 +220,7 @@ class DiscountService {
    * @param {number} id - ID del descuento
    * @returns {Promise<boolean>} true si el descuento está vigente y activo
    */
-  async isDiscountValidAndActive(id) {
+  async isDiscountValidAndActive (id) {
     const today = new Date()
     const discount = await Discount.findOne({
       where: {
@@ -239,10 +239,10 @@ class DiscountService {
    * @param {number} id - ID del descuento
    * @returns {Promise<boolean>} true si se eliminó correctamente
    */
-  async deleteDiscount(id) {
+  async deleteDiscount (id) {
     try {
       logger.logBusiness('deleteDiscount', { id })
-      
+
       const discount = await this.getDiscountById(id)
       await discount.destroy()
 

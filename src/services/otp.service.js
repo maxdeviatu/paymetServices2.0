@@ -11,7 +11,7 @@ class OtpService {
    * Genera un código OTP de 6 dígitos
    * @returns {string} Código OTP de 6 dígitos
    */
-  generateCode() {
+  generateCode () {
     return Math.floor(100000 + Math.random() * 900000).toString()
   }
 
@@ -19,7 +19,7 @@ class OtpService {
    * Calcula la fecha de expiración del OTP (10 minutos desde ahora)
    * @returns {Date} Fecha de expiración
    */
-  getExpirationDate() {
+  getExpirationDate () {
     const now = new Date()
     return new Date(now.getTime() + 10 * 60 * 1000) // 10 minutos
   }
@@ -29,7 +29,7 @@ class OtpService {
    * @param {string} email - Email del usuario
    * @returns {Promise<Object>} Resultado de la operación
    */
-  async requestOtp(email) {
+  async requestOtp (email) {
     try {
       logger.logBusiness('requestOtp', { email })
 
@@ -65,10 +65,10 @@ class OtpService {
         // Aunque falle el envío, mantenemos el código generado para testing
       }
 
-      logger.logBusiness('requestOtp.success', { 
+      logger.logBusiness('requestOtp.success', {
         email,
         otpId: otpRecord.id,
-        expiresAt 
+        expiresAt
       })
 
       return {
@@ -77,9 +77,9 @@ class OtpService {
         expiresAt
       }
     } catch (error) {
-      logger.logError(error, { 
+      logger.logError(error, {
         operation: 'requestOtp',
-        email 
+        email
       })
       throw error
     }
@@ -91,7 +91,7 @@ class OtpService {
    * @param {string} code - Código OTP a verificar
    * @returns {Promise<Object>} Resultado de la verificación
    */
-  async verifyOtp(email, code) {
+  async verifyOtp (email, code) {
     try {
       logger.logBusiness('verifyOtp', { email })
 
@@ -116,9 +116,9 @@ class OtpService {
       // Marcar el código como usado
       await otpRecord.update({ used: true })
 
-      logger.logBusiness('verifyOtp.success', { 
+      logger.logBusiness('verifyOtp.success', {
         email,
-        otpId: otpRecord.id 
+        otpId: otpRecord.id
       })
 
       return {
@@ -126,9 +126,9 @@ class OtpService {
         message: 'Código OTP verificado correctamente'
       }
     } catch (error) {
-      logger.logError(error, { 
+      logger.logError(error, {
         operation: 'verifyOtp',
-        email 
+        email
       })
       throw error
     }
@@ -138,7 +138,7 @@ class OtpService {
    * Limpia códigos OTP expirados de la base de datos
    * @returns {Promise<number>} Número de códigos eliminados
    */
-  async cleanupExpiredOtps() {
+  async cleanupExpiredOtps () {
     try {
       const deletedCount = await OtpCode.destroy({
         where: {
@@ -158,4 +158,4 @@ class OtpService {
   }
 }
 
-module.exports = new OtpService() 
+module.exports = new OtpService()

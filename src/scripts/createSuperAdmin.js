@@ -2,7 +2,7 @@ const { Admin } = require('../models/admin.model')
 const logger = require('../config/logger')
 require('dotenv').config()
 
-async function createSuperAdmin() {
+async function createSuperAdmin () {
   try {
     const superAdminEmail = process.env.SUPER_ADMIN_EMAIL
     const superAdminPassword = process.env.SUPER_ADMIN_PASSWORD
@@ -40,4 +40,4 @@ if (require.main === module) {
     .catch(() => process.exit(1))
 }
 
-module.exports = { createSuperAdmin } 
+module.exports = { createSuperAdmin }

@@ -1,12 +1,12 @@
-const axios = require('axios');
-const config = require('../../../../config');
-const logger = require('../../../../config/logger');
-const authService = require('./auth');
-const accountsService = require('./accounts');
+const axios = require('axios')
+const config = require('../../../../config')
+const logger = require('../../../../config/logger')
+const authService = require('./auth')
+const accountsService = require('./accounts')
 
 class CobreCheckoutService {
-  constructor() {
-    this.baseURL = config.cobre.baseUrl;
+  constructor () {
+    this.baseURL = config.cobre.baseUrl
   }
 
   /**
@@ -14,13 +14,13 @@ class CobreCheckoutService {
    * @param {Object} params Parámetros del checkout
    * @returns {Promise<Object>} Datos del checkout creado
    */
-  async createCheckout(params) {
+  async createCheckout (params) {
     try {
-      const token = await authService.getAccessToken();
-      const account = await accountsService.getCurrentAccount();
+      const token = await authService.getAccessToken()
+      const account = await accountsService.getCurrentAccount()
 
       if (!account) {
-        throw new Error('No hay una cuenta Cobre activa');
+        throw new Error('No hay una cuenta Cobre activa')
       }
 
       const checkoutData = {
@@ -35,36 +35,36 @@ class CobreCheckoutService {
         valid_until: params.validUntil || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
         money_movement_intent_limit: 1,
         redirect_url: params.redirectUrl || `${config.appUrl}/payment/complete`
-      };
+      }
 
       logger.info('💳 Creando checkout en Cobre:', {
         amount: checkoutData.amount,
         external_id: checkoutData.external_id
-      });
+      })
 
       const response = await axios.post(
         `${this.baseURL}/v1/checkouts`,
         checkoutData,
         {
           headers: {
-            'Authorization': `Bearer ${token}`,
+            Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json'
           }
         }
-      );
+      )
 
       logger.info('✅ Checkout creado exitosamente:', {
         checkout_id: response.data.id,
         checkout_url: response.data.checkout_url
-      });
+      })
 
-      return response.data;
+      return response.data
     } catch (error) {
       logger.error('❌ Error al crear checkout en Cobre:', {
         error: error.message,
         response: error.response?.data
-      });
-      throw error;
+      })
+      throw error
     }
   }
 
@@ -73,28 +73,28 @@ class CobreCheckoutService {
    * @param {string} checkoutId ID del checkout
    * @returns {Promise<Object>} Estado del checkout
    */
-  async getCheckoutStatus(checkoutId) {
+  async getCheckoutStatus (checkoutId) {
     try {
-      const token = await authService.getAccessToken();
+      const token = await authService.getAccessToken()
 
       const response = await axios.get(
         `${this.baseURL}/v1/checkouts/${checkoutId}`,
         {
           headers: {
-            'Authorization': `Bearer ${token}`
+            Authorization: `Bearer ${token}`
           }
         }
-      );
+      )
 
-      return response.data;
+      return response.data
     } catch (error) {
       logger.error('❌ Error al obtener estado del checkout:', {
         checkout_id: checkoutId,
         error: error.message
-      });
-      throw error;
+      })
+      throw error
     }
   }
 }
 
-module.exports = new CobreCheckoutService(); 
+module.exports = new CobreCheckoutService()

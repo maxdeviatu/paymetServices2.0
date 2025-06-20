@@ -7,7 +7,7 @@ const { requireRole } = require('../middlewares/role')
 const { validateRequest } = require('../middlewares/validator')
 
 // Ruta pública para login
-router.post('/login', 
+router.post('/login',
   [
     body('email').isEmail().withMessage('Debe proporcionar un email válido'),
     body('password').notEmpty().withMessage('La contraseña es requerida')
@@ -39,13 +39,13 @@ const createAdminValidations = [
 router.get('/', adminsController.getAdmins)
 router.get('/:id', adminsController.getAdminById)
 
-router.post('/', 
+router.post('/',
   createAdminValidations,
   validateRequest,
   adminsController.createAdmin
 )
 
-router.put('/:id', 
+router.put('/:id',
   adminValidations,
   validateRequest,
   adminsController.updateAdmin

@@ -1,13 +1,13 @@
-const { sequelize } = require('../models');
-const logger = require('../config/logger');
+const { sequelize } = require('../models')
+const logger = require('../config/logger')
 
 /**
  * Script para crear la tabla webhook_events
  * Se ejecuta durante el setup inicial de la base de datos
  */
-async function createWebhookEventsTable() {
+async function createWebhookEventsTable () {
   try {
-    logger.info('Creating webhook_events table...');
+    logger.info('Creating webhook_events table...')
 
     const query = `
       CREATE TABLE IF NOT EXISTS webhook_events (
@@ -63,11 +63,11 @@ async function createWebhookEventsTable() {
       COMMENT ON COLUMN webhook_events.raw_headers IS 'Headers originales del webhook';
       COMMENT ON COLUMN webhook_events.raw_body IS 'Body original del webhook (para logs/firma)';
       COMMENT ON COLUMN webhook_events.error_message IS 'Mensaje de error si falló el procesamiento';
-    `;
+    `
 
-    await sequelize.query(query);
+    await sequelize.query(query)
 
-    logger.info('✅ webhook_events table created successfully');
+    logger.info('✅ webhook_events table created successfully')
 
     // Verificar que la tabla se creó correctamente
     const [results] = await sequelize.query(`
@@ -75,54 +75,52 @@ async function createWebhookEventsTable() {
       FROM information_schema.tables 
       WHERE table_schema = 'public' 
       AND table_name = 'webhook_events'
-    `);
+    `)
 
     if (results.length > 0) {
-      logger.info('✅ webhook_events table verification successful');
-      
+      logger.info('✅ webhook_events table verification successful')
+
       // Mostrar estructura de la tabla
       const [columns] = await sequelize.query(`
         SELECT column_name, data_type, is_nullable
         FROM information_schema.columns
         WHERE table_name = 'webhook_events'
         ORDER BY ordinal_position
-      `);
+      `)
 
-      logger.info('📋 Table structure:');
+      logger.info('📋 Table structure:')
       columns.forEach(col => {
-        logger.info(`   ${col.column_name}: ${col.data_type} ${col.is_nullable === 'NO' ? 'NOT NULL' : ''}`);
-      });
-
+        logger.info(`   ${col.column_name}: ${col.data_type} ${col.is_nullable === 'NO' ? 'NOT NULL' : ''}`)
+      })
     } else {
-      throw new Error('Table creation verification failed');
+      throw new Error('Table creation verification failed')
     }
-
   } catch (error) {
     logger.error('❌ Error creating webhook_events table:', {
       error: error.message,
       stack: error.stack
-    });
-    throw error;
+    })
+    throw error
   }
 }
 
 /**
  * Función para ejecutar la migración desde la línea de comandos
  */
-async function runMigration() {
+async function runMigration () {
   try {
-    await createWebhookEventsTable();
-    console.log('✅ Webhook events table migration completed successfully');
-    process.exit(0);
+    await createWebhookEventsTable()
+    console.log('✅ Webhook events table migration completed successfully')
+    process.exit(0)
   } catch (error) {
-    console.error('❌ Webhook events table migration failed:', error.message);
-    process.exit(1);
+    console.error('❌ Webhook events table migration failed:', error.message)
+    process.exit(1)
   }
 }
 
 // Ejecutar si se llama directamente
 if (require.main === module) {
-  runMigration();
+  runMigration()
 }
 
-module.exports = { createWebhookEventsTable }; 
+module.exports = { createWebhookEventsTable }

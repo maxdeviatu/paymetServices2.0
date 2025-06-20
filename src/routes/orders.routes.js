@@ -3,10 +3,10 @@ const router = express.Router()
 const ordersController = require('../controllers/orders.controller')
 const { authenticate } = require('../middlewares/auth')
 const { requireRole } = require('../middlewares/role')
-const { 
-  orderCreationLimiter, 
-  paymentLimiter, 
-  orderLookupSlowDown 
+const {
+  orderCreationLimiter,
+  paymentLimiter,
+  orderLookupSlowDown
 } = require('../middlewares/rateLimiter')
 const {
   validateOrderCreation,
@@ -26,7 +26,7 @@ router.use(logPublicRequest)
 router.use(sanitizeInput)
 
 // Public order creation (no auth required for customer orders)
-router.post('/', 
+router.post('/',
   orderCreationLimiter,
   validateOrderCreation,
   handleValidationErrors,
@@ -34,7 +34,7 @@ router.post('/',
 )
 
 // Payment initiation (no auth required)
-router.post('/:orderId/payment', 
+router.post('/:orderId/payment',
   paymentLimiter,
   validatePaymentInitiation,
   handleValidationErrors,
@@ -42,7 +42,7 @@ router.post('/:orderId/payment',
 )
 
 // Public order lookup (customers need to access their orders)
-router.get('/:orderId', 
+router.get('/:orderId',
   orderLookupSlowDown,
   validateOrderLookup,
   handleValidationErrors,
@@ -50,7 +50,7 @@ router.get('/:orderId',
 )
 
 // Customer order history (no auth required, filtering by customerId in query)
-router.get('/customer/:customerId', 
+router.get('/customer/:customerId',
   orderLookupSlowDown,
   validateCustomerOrdersLookup,
   handleValidationErrors,
@@ -58,7 +58,7 @@ router.get('/customer/:customerId',
 )
 
 // Transaction status check (no auth required)
-router.get('/transactions/:transactionId/status', 
+router.get('/transactions/:transactionId/status',
   validateTransactionLookup,
   handleValidationErrors,
   ordersController.getTransactionStatus
@@ -71,7 +71,7 @@ router.use(authenticate)
 router.get('/', requireRole('READ_ONLY'), ordersController.getAllOrders)
 
 // Admin: Update order status
-router.put('/:orderId/status', 
+router.put('/:orderId/status',
   requireRole('EDITOR'),
   validateOrderLookup,
   handleValidationErrors,
@@ -79,7 +79,7 @@ router.put('/:orderId/status',
 )
 
 // Admin: Cancel order (EDITOR+ role required)
-router.post('/:orderId/cancel', 
+router.post('/:orderId/cancel',
   requireRole('EDITOR'),
   validateOrderLookup,
   handleValidationErrors,
