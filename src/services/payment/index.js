@@ -50,6 +50,16 @@ class PaymentService {
           try {
             await provider.authenticate()
             logger.info(`✅ ${providerName} authentication successful on startup`)
+            
+            // Verificación adicional para Cobre
+            if (providerName === 'cobre') {
+              if (provider.isTokenValid && provider.isTokenValid()) {
+                logger.info(`✅ ${providerName} token validation successful`)
+              } else {
+                logger.warn(`⚠️ ${providerName} token validation failed`)
+              }
+            }
+            
             return { provider: providerName, status: 'success' }
           } catch (error) {
             logger.error(`❌ Error inicializando ${providerName}:`, error.message)
@@ -70,6 +80,14 @@ class PaymentService {
       if (failed > 0) {
         logger.info(`   ❌ Fallidos: ${failed}`)
       }
+      
+      // Verificación final de estado de proveedores
+      logger.info(`\n🔍 Estado final de proveedores:`)
+      availableProviders.forEach(providerName => {
+        const isReady = this.isProviderReady(providerName)
+        const status = isReady ? '✅ Ready' : '❌ Not Ready'
+        logger.info(`   ${providerName}: ${status}`)
+      })
       
       this.initialized = true
       

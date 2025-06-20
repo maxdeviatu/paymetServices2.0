@@ -1,0 +1,526 @@
+const { Transaction, Order, CobreCheckout, sequelize } = require('../../../models');
+const { Op } = require('sequelize');
+const logger = require('../../../config/logger');
+
+/**
+ * Handler para procesar eventos de transacciones de webhooks
+ */
+class TransactionHandler {
+  /**
+   * Procesa un evento de webhook
+   * @param {Object} webhookEvent - Evento normalizado del webhook
+   * @returns {Promise<Object>} - Resultado del procesamiento
+   */
+  async handle(webhookEvent) {
+    try {
+      logger.info('TransactionHandler: Processing webhook event', {
+        provider: webhookEvent.provider,
+        type: webhookEvent.type,
+        externalRef: webhookEvent.externalRef,
+        status: webhookEvent.status,
+        amount: webhookEvent.amount
+      });
+
+      return await sequelize.transaction(async (t) => {
+        // Buscar la transacción por referencia externa
+        const transaction = await this.findTransaction(webhookEvent, t);
+        
+        if (!transaction) {
+          logger.warn('TransactionHandler: Transaction not found', {
+            externalRef: webhookEvent.externalRef,
+            provider: webhookEvent.provider
+          });
+          return {
+            success: false,
+            reason: 'transaction_not_found',
+            externalRef: webhookEvent.externalRef
+          };
+        }
+
+        // Verificar si ya fue procesado (idempotencia)
+        if (this.isAlreadyProcessed(transaction, webhookEvent)) {
+          logger.info('TransactionHandler: Event already processed', {
+            transactionId: transaction.id,
+            currentStatus: transaction.status,
+            webhookStatus: webhookEvent.status
+          });
+          return {
+            success: true,
+            reason: 'already_processed',
+            transactionId: transaction.id
+          };
+        }
+
+        // Actualizar la transacción
+        const oldStatus = transaction.status;
+        await this.updateTransaction(transaction, webhookEvent, t);
+
+        // Procesar lógica específica según el estado
+        if (webhookEvent.status === 'PAID' && oldStatus !== 'PAID') {
+          await this.handlePaymentSuccess(transaction, t);
+        } else if (['FAILED', 'CANCELLED', 'EXPIRED'].includes(webhookEvent.status)) {
+          await this.handlePaymentFailure(transaction, t);
+        }
+
+        logger.info('TransactionHandler: Successfully processed webhook', {
+          transactionId: transaction.id,
+          orderId: transaction.orderId,
+          oldStatus,
+          newStatus: webhookEvent.status,
+          externalRef: webhookEvent.externalRef
+        });
+
+        return {
+          success: true,
+          transactionId: transaction.id,
+          orderId: transaction.orderId,
+          oldStatus,
+          newStatus: webhookEvent.status
+        };
+      });
+    } catch (error) {
+      logger.error('TransactionHandler: Error processing webhook', {
+        error: error.message,
+        stack: error.stack,
+        webhookEvent: {
+          provider: webhookEvent.provider,
+          externalRef: webhookEvent.externalRef,
+          type: webhookEvent.type
+        }
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Busca la transacción por referencia externa
+   * @param {Object} webhookEvent - Evento del webhook
+   * @param {Object} transaction - Transacción de Sequelize
+   * @returns {Promise<Transaction>} - Transacción encontrada
+   */
+  async findTransaction(webhookEvent, transaction) {
+    const provider = webhookEvent.provider;
+    const externalRef = webhookEvent.externalRef;
+    const eventType = webhookEvent.type;
+
+    logger.info('TransactionHandler: Searching for transaction', {
+      provider,
+      externalRef,
+      eventType
+    });
+
+    let foundTransaction = null;
+
+    if (provider === 'cobre') {
+      // Para Cobre, intentar múltiples estrategias de búsqueda
+      foundTransaction = await this.findCobreTransaction(webhookEvent, transaction);
+    } else {
+      // Para otros proveedores, buscar por gatewayRef directamente
+      foundTransaction = await Transaction.findOne({
+        where: {
+          gateway: provider,
+          gatewayRef: externalRef
+        },
+        include: [{
+          association: 'order',
+          include: [
+            { association: 'product' },
+            { association: 'customer' }
+          ]
+        }],
+        transaction
+      });
+    }
+
+    if (!foundTransaction) {
+      logger.warn('TransactionHandler: Transaction not found after all search strategies', {
+        provider,
+        externalRef,
+        eventType
+      });
+      return null;
+    }
+
+    logger.info('TransactionHandler: Transaction found', {
+      transactionId: foundTransaction.id,
+      orderId: foundTransaction.orderId,
+      gateway: foundTransaction.gateway,
+      gatewayRef: foundTransaction.gatewayRef,
+      status: foundTransaction.status
+    });
+
+    return foundTransaction;
+  }
+
+  /**
+   * Busca transacciones específicamente para Cobre usando múltiples estrategias
+   * @param {Object} webhookEvent - Evento del webhook
+   * @param {Object} transaction - Transacción de Sequelize
+   * @returns {Promise<Transaction>} - Transacción encontrada
+   */
+  async findCobreTransaction(webhookEvent, transaction) {
+    const externalRef = webhookEvent.externalRef;
+    const eventType = webhookEvent.type;
+
+    // Estrategia 1: Buscar por gatewayRef directo (para casos normales)
+    let foundTransaction = await Transaction.findOne({
+      where: {
+        gateway: 'cobre',
+        gatewayRef: externalRef
+      },
+      include: [{
+        association: 'order',
+        include: [
+          { association: 'product' },
+          { association: 'customer' }
+        ]
+      }],
+      transaction
+    });
+
+    if (foundTransaction) {
+      logger.info('TransactionHandler: Found Cobre transaction by gatewayRef', {
+        transactionId: foundTransaction.id,
+        gatewayRef: foundTransaction.gatewayRef
+      });
+      return foundTransaction;
+    }
+
+    // Estrategia 2: Buscar por uniqueTransactionId en metadata (para eventos de balance credit)
+    if (eventType === 'balance_credit') {
+      foundTransaction = await Transaction.findOne({
+        where: {
+          gateway: 'cobre',
+          meta: {
+            [Op.contains]: {
+              uniqueTransactionId: externalRef
+            }
+          }
+        },
+        include: [{
+          association: 'order',
+          include: [
+            { association: 'product' },
+            { association: 'customer' }
+          ]
+        }],
+        transaction
+      });
+
+      if (foundTransaction) {
+        logger.info('TransactionHandler: Found Cobre transaction by uniqueTransactionId in metadata', {
+          transactionId: foundTransaction.id,
+          uniqueTransactionId: externalRef
+        });
+        return foundTransaction;
+      }
+    }
+
+    // Estrategia 3: Buscar a través de la tabla cobre_checkouts
+    const cobreCheckout = await CobreCheckout.findOne({
+      where: {
+        [Op.or]: [
+          { checkoutId: externalRef },
+          // También buscar por el eventId en caso de que sea un evento relacionado
+          { checkoutId: { [Op.like]: `%${externalRef}%` } }
+        ]
+      },
+      include: [{
+        model: Transaction,
+        as: 'transaction',
+        include: [{
+          association: 'order',
+          include: [
+            { association: 'product' },
+            { association: 'customer' }
+          ]
+        }]
+      }],
+      transaction
+    });
+
+    if (cobreCheckout && cobreCheckout.transaction) {
+      logger.info('TransactionHandler: Found Cobre transaction through checkout table', {
+        transactionId: cobreCheckout.transaction.id,
+        checkoutId: cobreCheckout.checkoutId
+      });
+      return cobreCheckout.transaction;
+    }
+
+    // Estrategia 4: Buscar por patrón en gatewayRef (para casos donde el evento ID esté relacionado)
+    // Esto es un último recurso para casos especiales
+    const recentTransactions = await Transaction.findAll({
+      where: {
+        gateway: 'cobre',
+        status: ['CREATED', 'PENDING'],
+        createdAt: {
+          [Op.gte]: new Date(Date.now() - 24 * 60 * 60 * 1000) // Últimas 24 horas
+        }
+      },
+      include: [{
+        association: 'order',
+        include: [
+          { association: 'product' },
+          { association: 'customer' }
+        ]
+      }],
+      order: [['createdAt', 'DESC']],
+      limit: 10,
+      transaction
+    });
+
+    // Intentar encontrar correlación por monto y timing
+    for (const trans of recentTransactions) {
+      if (trans.amount === webhookEvent.amount) {
+        logger.info('TransactionHandler: Found potential Cobre transaction by amount matching', {
+          transactionId: trans.id,
+          gatewayRef: trans.gatewayRef,
+          amount: trans.amount,
+          webhookAmount: webhookEvent.amount
+        });
+        return trans;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Verifica si el evento ya fue procesado
+   * @param {Transaction} transaction - Transacción
+   * @param {Object} webhookEvent - Evento del webhook
+   * @returns {boolean} - true si ya fue procesado
+   */
+  isAlreadyProcessed(transaction, webhookEvent) {
+    // Si la transacción ya está pagada y el webhook también indica pago, ya fue procesado
+    if (transaction.status === 'PAID' && webhookEvent.status === 'PAID') {
+      return true;
+    }
+
+    // Verificar si hay metadata del webhook que indique que ya fue procesado
+    if (transaction.meta && transaction.meta.lastWebhookAt) {
+      const lastWebhookTime = new Date(transaction.meta.lastWebhookAt);
+      const webhookTime = new Date(webhookEvent.payload.created_at || Date.now());
+      
+      // Si el webhook es más antiguo que el último procesado, ya fue procesado
+      if (webhookTime <= lastWebhookTime) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Actualiza la transacción con los datos del webhook
+   * @param {Transaction} transaction - Transacción a actualizar
+   * @param {Object} webhookEvent - Evento del webhook
+   * @param {Object} dbTransaction - Transacción de base de datos
+   */
+  async updateTransaction(transaction, webhookEvent, dbTransaction) {
+    const updateData = {
+      status: webhookEvent.status,
+      meta: {
+        ...transaction.meta,
+        webhook: {
+          eventId: webhookEvent.eventId,
+          type: webhookEvent.type,
+          status: webhookEvent.status,
+          amount: webhookEvent.amount,
+          currency: webhookEvent.currency,
+          processedAt: new Date().toISOString()
+        },
+        lastWebhookAt: new Date().toISOString()
+      }
+    };
+
+    // Agregar información específica del proveedor
+    if (webhookEvent.provider === 'cobre') {
+      updateData.meta.cobreEvent = webhookEvent.payload;
+    }
+
+    await transaction.update(updateData, { transaction: dbTransaction });
+  }
+
+  /**
+   * Maneja el pago exitoso
+   * @param {Transaction} transaction - Transacción
+   * @param {Object} dbTransaction - Transacción de base de datos
+   */
+  async handlePaymentSuccess(transaction, dbTransaction) {
+    try {
+      const order = transaction.order;
+
+      // Actualizar estado de la orden
+      await order.update({
+        status: 'IN_PROCESS'
+      }, { transaction: dbTransaction });
+
+      // Si es producto digital con licencia, completar inmediatamente
+      if (order.product && order.product.license_type) {
+        await this.reserveLicenseForOrder(order, dbTransaction);
+        
+        // Completar la orden
+        await order.update({
+          status: 'COMPLETED'
+        }, { transaction: dbTransaction });
+
+        // Enviar email de licencia de forma asíncrona
+        setImmediate(async () => {
+          try {
+            await this.sendLicenseEmail(order, transaction);
+          } catch (emailError) {
+            logger.error('TransactionHandler: Error sending license email', {
+              error: emailError.message,
+              orderId: order.id
+            });
+          }
+        });
+      }
+
+      // Enviar email de confirmación
+      setImmediate(async () => {
+        try {
+          await this.sendOrderConfirmation(order, transaction);
+        } catch (emailError) {
+          logger.error('TransactionHandler: Error sending order confirmation', {
+            error: emailError.message,
+            orderId: order.id
+          });
+        }
+      });
+
+      logger.info('TransactionHandler: Payment success handled', {
+        orderId: order.id,
+        transactionId: transaction.id,
+        hasLicense: order.product?.license_type || false
+      });
+    } catch (error) {
+      logger.error('TransactionHandler: Error handling payment success', {
+        error: error.message,
+        transactionId: transaction.id
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Maneja el pago fallido
+   * @param {Transaction} transaction - Transacción
+   * @param {Object} dbTransaction - Transacción de base de datos
+   */
+  async handlePaymentFailure(transaction, dbTransaction) {
+    try {
+      const order = transaction.order;
+
+      // Verificar si hay otras transacciones pendientes
+      const otherTransactions = await Transaction.findAll({
+        where: {
+          orderId: order.id,
+          id: { [Op.ne]: transaction.id },
+          status: { [Op.in]: ['CREATED', 'PENDING'] }
+        },
+        transaction: dbTransaction
+      });
+
+      // Si no hay otras transacciones pendientes, cancelar la orden
+      if (otherTransactions.length === 0) {
+        await order.update({
+          status: 'CANCELED'
+        }, { transaction: dbTransaction });
+      }
+
+      logger.info('TransactionHandler: Payment failure handled', {
+        orderId: order.id,
+        transactionId: transaction.id,
+        orderCanceled: otherTransactions.length === 0
+      });
+    } catch (error) {
+      logger.error('TransactionHandler: Error handling payment failure', {
+        error: error.message,
+        transactionId: transaction.id
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Reserva una licencia para la orden
+   * @param {Order} order - Orden
+   * @param {Object} dbTransaction - Transacción de base de datos
+   * @returns {Promise<License>} - Licencia reservada
+   */
+  async reserveLicenseForOrder(order, dbTransaction) {
+    const { License } = require('../../../models');
+
+    // Buscar licencia disponible
+    const license = await License.findOne({
+      where: {
+        productRef: order.productRef,
+        status: 'AVAILABLE'
+      },
+      lock: dbTransaction.LOCK.UPDATE,
+      transaction: dbTransaction
+    });
+
+    if (!license) {
+      throw new Error(`No available licenses for product ${order.productRef}`);
+    }
+
+    // Reservar licencia
+    await license.update({
+      status: 'SOLD',
+      orderId: order.id,
+      soldAt: new Date()
+    }, { transaction: dbTransaction });
+
+    logger.info('TransactionHandler: License reserved', {
+      licenseId: license.id,
+      orderId: order.id,
+      productRef: order.productRef
+    });
+
+    return license;
+  }
+
+  /**
+   * Envía email de confirmación de orden
+   * @param {Order} order - Orden
+   * @param {Transaction} transaction - Transacción
+   */
+  async sendOrderConfirmation(order, transaction) {
+    const emailService = require('../../email');
+    
+    await emailService.sendOrderConfirmation({
+      customer: order.customer,
+      product: order.product,
+      order,
+      transaction
+    });
+  }
+
+  /**
+   * Envía email con licencia
+   * @param {Order} order - Orden
+   * @param {Transaction} transaction - Transacción
+   */
+  async sendLicenseEmail(order, transaction) {
+    const emailService = require('../../email');
+    const { License } = require('../../../models');
+
+    const license = await License.findOne({
+      where: { orderId: order.id }
+    });
+
+    if (license) {
+      await emailService.sendLicenseEmail({
+        customer: order.customer,
+        product: order.product,
+        license,
+        order
+      });
+    }
+  }
+}
+
+module.exports = new TransactionHandler(); 

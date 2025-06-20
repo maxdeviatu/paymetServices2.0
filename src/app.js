@@ -9,8 +9,12 @@ const { PORT } = require('./config')
 const jobScheduler = require('./jobs/scheduler')
 const { generalLimiter } = require('./middlewares/rateLimiter')
 const paymentService = require('./services/payment')
+const EnvironmentValidator = require('./config/envValidator')
 
 const app = express()
+
+// Trust proxy for webhooks and ngrok
+app.set('trust proxy', true)
 
 // Security middleware
 app.use(helmet({
@@ -77,10 +81,72 @@ app.use((err, req, res, next) => {
   })
 })
 
+/**
+ * Inicializar suscripción de webhooks de Cobre
+ */
+async function initializeCobreWebhookSubscription() {
+  try {
+    // Solo ejecutar en producción o si está explícitamente habilitado
+    if (process.env.NODE_ENV === 'test') {
+      logger.info('Skipping Cobre webhook subscription in test environment')
+      return;
+    }
+
+    // Verificar si las variables de entorno están configuradas
+    if (!process.env.COBRE_WEBHOOK_URL || !process.env.COBRE_WEBHOOK_SECRET) {
+      logger.warn('Cobre webhook configuration missing, skipping subscription setup');
+      logger.warn('Required env vars: COBRE_WEBHOOK_URL, COBRE_WEBHOOK_SECRET');
+      return;
+    }
+
+    logger.info('Initializing Cobre webhook subscription...');
+    
+    const CobreSubscriptionBootstrap = require('./scripts/bootstrapCobreSubscription');
+    const bootstrap = new CobreSubscriptionBootstrap();
+    
+    const result = await bootstrap.bootstrap();
+    
+    logger.info('✅ Cobre webhook subscription initialized successfully', {
+      subscriptionId: result.id,
+      url: result.url,
+      events: result.events,
+      createdAt: result.created_at
+    });
+
+  } catch (error) {
+    logger.error('❌ Failed to initialize Cobre webhook subscription', {
+      error: error.message,
+      stack: error.stack
+    });
+    
+    // No fallar el servidor por problemas de webhook
+    logger.warn('Server will continue without webhook subscription');
+  }
+}
+
 // Función para inicializar el servidor
 async function initializeServer() {
   try {
-    // Inicializar la base de datos
+    // 1. VALIDAR VARIABLES DE ENTORNO ANTES QUE NADA
+    console.log('\n🔧 Iniciando validación de configuración...');
+    const envValidator = new EnvironmentValidator();
+    const validationResult = envValidator.validate();
+    
+    if (!validationResult.isValid) {
+      console.log('\n❌ CONFIGURACIÓN INVÁLIDA - No se puede iniciar el servidor');
+      envValidator.printDetailedReport(validationResult.report);
+      console.log('\n📖 Consulta VARIABLES_ENTORNO.md y .env.example para más información');
+      process.exit(1);
+    }
+    
+    // Mostrar resumen de configuración
+    logger.info('✅ Validación de variables de entorno completada exitosamente');
+    if (validationResult.warnings.length > 0) {
+      logger.warn(`⚠️ Se encontraron ${validationResult.warnings.length} advertencia(s) - revisar logs`);
+    }
+    
+    // 2. Inicializar la base de datos
+    logger.info('🔗 Inicializando conexión a base de datos...');
     const dbConnected = await initDB()
     
     if (!dbConnected) {
@@ -111,8 +177,11 @@ async function initializeServer() {
 
       // Inicializar proveedores de pago después de que todo esté listo
       paymentService.initialize()
-        .then(() => {
+        .then(async () => {
           logger.info('Payment providers initialization completed')
+          
+          // Inicializar suscripción de webhooks de Cobre después de los proveedores
+          await initializeCobreWebhookSubscription();
         })
         .catch(error => {
           logger.error('Failed to initialize payment providers:', error.message)

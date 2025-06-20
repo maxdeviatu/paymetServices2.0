@@ -13,7 +13,13 @@
     "lint:fix": "standard --fix",
     "create-admin": "node src/scripts/createSuperAdmin.js",
     "db:migrate": "sequelize-cli db:migrate",
-    "db:seed": "sequelize-cli db:seed:all"
+    "db:seed": "sequelize-cli db:seed:all",
+    "env:validate": "node src/scripts/validateEnvironment.js",
+    "webhook:setup": "node src/scripts/createWebhookEventsTable.js",
+    "cobre:subscribe": "node src/scripts/bootstrapCobreSubscription.js",
+    "cobre:test": "node src/scripts/testCobreConnection.js",
+    "webhook:test": "curl -X POST http://localhost:3000/webhooks/mock -H 'Content-Type: application/json' -H 'x-mock-signature: test-signature' -d '{\"reference\":\"test-ref\",\"status\":\"PAID\",\"amount\":10000}'",
+    "webhook:test-cobre": "node src/scripts/testWebhook.js"
   },
   "keywords": [
     "payments",

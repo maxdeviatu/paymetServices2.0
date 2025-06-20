@@ -7,6 +7,7 @@ const License = require('./license.model')
 const Order = require('./order.model')
 const Transaction = require('./transaction.model')
 const CobreCheckout = require('./cobreCheckout')
+const WebhookEvent = require('./webhookEvent.model')
 const { initDB, sequelize } = require('./db')
 
 // Establecer relaciones entre modelos
@@ -82,6 +83,7 @@ module.exports = {
   Order,
   Transaction,
   CobreCheckout,
+  WebhookEvent,
   DOCUMENT_TYPES,
   initDB,
   sequelize

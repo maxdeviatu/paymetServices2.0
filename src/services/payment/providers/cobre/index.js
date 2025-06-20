@@ -36,6 +36,19 @@ class CobreProvider {
     return `${productRef}-cobre-${orderId}-${dateTimeLocal}`;
   }
 
+  /**
+   * Generate unique transaction ID for webhook tracking
+   * Format: mm_{randomString}
+   */
+  generateUniqueTransactionId() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let result = 'mm_';
+    for (let i = 0; i < 16; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  }
+
   async authenticate() {
     return auth.authenticate();
   }
@@ -82,6 +95,9 @@ class CobreProvider {
       const productRef = product?.productRef || order.productRef;
       const externalId = this.generateExternalId(productRef, order.id);
       
+      // Generate unique transaction ID for webhook tracking
+      const uniqueTransactionId = this.generateUniqueTransactionId();
+      
       // Prepare checkout data
       const checkoutData = {
         alias: `Order-${order.id}-${Date.now()}`,
@@ -94,7 +110,13 @@ class CobreProvider {
         description_to_payee: this.sanitizeForCobre('Pago Innovate Learning').substring(0, 40), // Standardized description for better visibility
         valid_until: validUntil.toISOString(),
         money_movement_intent_limit: 1, // Single use link
-        redirect_url: process.env.PAYMENT_SUCCESS_URL || 'https://innovatelearning.com.co/payment/success'
+        redirect_url: process.env.PAYMENT_SUCCESS_URL || 'https://innovatelearning.com.co/payment/success',
+        metadata: {
+          uniqueTransactionId: uniqueTransactionId,
+          orderId: order.id,
+          productRef: productRef,
+          customerEmail: order.customer?.email
+        }
       };
 
       logger.info(' Datos del checkout:', {
@@ -103,6 +125,7 @@ class CobreProvider {
         currency: product?.currency || 'USD',
         destinationId: account.id,
         externalId: checkoutData.external_id,
+        uniqueTransactionId: uniqueTransactionId,
         checkoutHeader: checkoutData.checkout_header,
         checkoutItem: checkoutData.checkout_item,
         descriptionToPayee: checkoutData.description_to_payee,
@@ -137,7 +160,10 @@ class CobreProvider {
           checkoutUrl: checkout.checkout_url,
           validUntil: checkout.valid_until,
           destinationId: checkout.destination_id,
-          externalId: externalId
+          externalId: externalId,
+          uniqueTransactionId: uniqueTransactionId, // Important for webhook tracking
+          orderId: order.id,
+          productRef: productRef
         }
       };
       

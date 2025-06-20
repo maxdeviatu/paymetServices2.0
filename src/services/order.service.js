@@ -126,8 +126,8 @@ async function getOrCreateCustomer(customerData, transaction) {
   if (!user && documentType && documentNumber) {
     user = await User.findOne({
       where: {
-        documentType,
-        documentNumber
+        document_type: documentType,
+        document_number: documentNumber
       },
       transaction
     })
@@ -152,14 +152,14 @@ async function getOrCreateCustomer(customerData, transaction) {
   }
 
   const newUser = await User.create({
-    firstName,
-    lastName,
+    first_name: firstName,
+    last_name: lastName,
     email: email.toLowerCase(),
-    documentType: documentType || 'CC',
-    documentNumber: documentNumber || `AUTO-${Date.now()}`,
+    document_type: documentType || 'CC',
+    document_number: documentNumber || `AUTO-${Date.now()}`,
     phone,
-    birthDate: null,
-    consentAccepted: true // Auto-accept for order flow
+    birth_date: null,
+    consent_accepted: true // Auto-accept for order flow
   }, { transaction })
 
   logger.logBusiness('customer:created', {
