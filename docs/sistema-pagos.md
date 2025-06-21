@@ -521,3 +521,142 @@ volumes:
 **Versión**: 1.0  
 **Última actualización**: Junio 2025  
 **Mantenedores**: Equipo Innovate Learning
+
+## Flujo de Pago y Licencias
+
+### Procesamiento de Pagos Exitosos
+
+Cuando un pago es exitoso (webhook `PAID`):
+
+1. **Actualización de Transacción**
+   - Status: `PAID`
+   - Metadata: Información del webhook
+
+2. **Actualización de Orden**
+   - Status: `IN_PROCESS` → `COMPLETED`
+
+3. **Reserva de Licencia** (solo para productos digitales)
+   - Busca licencia `AVAILABLE` para el producto
+   - Cambia status a `SOLD`
+   - Asigna `orderId` y `soldAt`
+
+4. **Envío de Emails**
+   - Email de confirmación de orden
+   - Email con licencia (para productos digitales)
+
+### Manejo de Pagos Fallidos
+
+Cuando un pago falla (webhook `FAILED`, `REJECTED`, `CANCELLED`):
+
+1. **Actualización de Transacción**
+   - Status: `FAILED`
+   - Metadata: Información del webhook
+
+2. **Verificación de Otras Transacciones**
+   - Si no hay otras transacciones pendientes: orden se cancela
+   - Si hay otras transacciones pendientes: orden sigue `PENDING`
+
+3. **Liberación de Licencias**
+   - Solo si la orden se cancela
+   - Licencias `SOLD` vuelven a `AVAILABLE`
+
+### Timeout de Órdenes
+
+#### Configuración
+```bash
+ORDER_TIMEOUT_MINUTES=30  # 30 minutos por defecto
+```
+
+#### Proceso Automático
+- **Frecuencia**: Cada 10 minutos
+- **Búsqueda**: Órdenes `PENDING` creadas hace más de 30 minutos
+- **Acción**: Cancelación automática
+
+#### Liberación de Licencias en Timeout
+```javascript
+// Solo libera licencias si la orden tenía licencias reservadas
+const reservedLicenses = await License.findAll({
+  where: {
+    orderId: order.id,
+    status: { [Op.in]: ['RESERVED', 'SOLD'] }
+  }
+})
+
+// Libera las licencias
+await license.update({
+  status: 'AVAILABLE',
+  orderId: null,
+  soldAt: null
+})
+```
+
+**Nota**: En el flujo normal, las licencias solo se reservan cuando el pago es exitoso. Si una orden expira por timeout, generalmente no tiene licencias reservadas que liberar.
+
+### Estados de Licencias
+
+```javascript
+status: {
+  type: DataTypes.ENUM('AVAILABLE', 'RESERVED', 'SOLD', 'ANNULLED', 'RETURNED'),
+  defaultValue: 'AVAILABLE'
+}
+```
+
+#### Flujo de Estados
+1. **AVAILABLE**: Licencia disponible para venta
+2. **SOLD**: Licencia vendida (se asigna al pago exitoso)
+3. **ANNULLED**: Licencia anulada por admin
+4. **RETURNED**: Licencia devuelta al stock
+
+**Nota**: El estado `RESERVED` no se usa en el flujo actual. Las licencias van directamente de `AVAILABLE` a `SOLD` cuando el pago es exitoso.
+
+### Casos de Liberación de Licencias SOLD
+
+Las licencias `SOLD` solo se liberan en casos excepcionales:
+
+#### 1. Errores del Sistema
+- Pago exitoso → Licencia `SOLD`
+- Error posterior en el sistema
+- Orden queda en estado inconsistente
+- Timeout libera la licencia
+
+#### 2. Múltiples Transacciones
+- Cliente intenta pagar varias veces
+- Una transacción falla, otra funciona
+- Sistema libera licencias de transacciones fallidas
+
+#### 3. Cancelación Manual
+- Admin cancela orden manualmente
+- Libera licencias `SOLD` asociadas
+
+#### 4. Timeout de Orden
+- Orden expira sin pago exitoso
+- Si tenía licencias `SOLD` (caso raro), las libera
+
+### Ejemplos de Flujo
+
+#### Flujo Exitoso
+```
+1. Cliente crea orden → Licencia: AVAILABLE
+2. Cliente paga → Webhook PAID
+3. Sistema reserva licencia → Licencia: SOLD
+4. Orden completada → Status: COMPLETED
+5. Email enviado con licencia
+```
+
+#### Flujo con Timeout
+```
+1. Cliente crea orden → Licencia: AVAILABLE
+2. Cliente no paga en 30 minutos
+3. Sistema cancela orden → Licencia: Sigue AVAILABLE
+4. Orden cancelada → Status: CANCELED
+```
+
+#### Flujo con Error
+```
+1. Cliente crea orden → Licencia: AVAILABLE
+2. Cliente paga → Webhook PAID
+3. Sistema reserva licencia → Licencia: SOLD
+4. Error en el sistema → Orden queda PENDING
+5. Timeout después de 30 minutos → Libera licencia
+6. Licencia vuelve a AVAILABLE
+```

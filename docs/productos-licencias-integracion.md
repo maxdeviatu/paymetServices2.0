@@ -1,254 +1,276 @@
-# Integración Productos y Licencias
+# Sistema de Licencias - Guía Completa
 
-## Descripción General
+## Resumen
 
-El sistema de payment-services2.0 implementa una integración robusta entre productos y licencias digitales, permitiendo gestionar inventarios de licencias de software, cursos digitales, y otros productos que requieren claves de activación.
+El sistema de licencias maneja la reserva y asignación de licencias para productos digitales. Las licencias se reservan **solo cuando el pago es exitoso**, no al crear la orden.
 
-## Arquitectura de la Integración
+## Estados de Licencias
 
-### Relación Base de Datos
+```javascript
+status: {
+  type: DataTypes.ENUM('AVAILABLE', 'RESERVED', 'SOLD', 'ANNULLED', 'RETURNED'),
+  defaultValue: 'AVAILABLE'
+}
+```
+
+### Descripción de Estados
+
+| Estado | Descripción | Cuándo se Asigna |
+|--------|-------------|------------------|
+| `AVAILABLE` | Licencia disponible para venta | Estado inicial, después de liberación |
+| `SOLD` | Licencia vendida y asignada | Cuando el pago es exitoso |
+| `ANNULLED` | Licencia anulada por admin | Cancelación manual |
+| `RETURNED` | Licencia devuelta al stock | Devolución manual |
+| `RESERVED` | **No se usa en el flujo actual** | - |
+
+## Flujo de Reserva de Licencias
+
+### 1. Creación de Orden
+```javascript
+// Cliente crea orden para producto digital
+// Licencia: Sigue AVAILABLE (NO se reserva)
+// Estado de orden: PENDING
+```
+
+### 2. Pago Exitoso (Webhook PAID)
+```javascript
+// Cliente paga exitosamente
+// Sistema recibe webhook de confirmación
+// Licencia: AVAILABLE → SOLD (se reserva AHORA)
+// Estado de orden: COMPLETED
+```
+
+### 3. Timeout de Orden (30 minutos)
+```javascript
+// Cliente no paga en 30 minutos
+// Sistema cancela orden
+// Licencia: Sigue AVAILABLE (nunca se reservó)
+// Estado de orden: CANCELED
+```
+
+## Cuándo se Liberan las Licencias SOLD
+
+**Las licencias SOLD solo se liberan en casos excepcionales:**
+
+### 1. Errores del Sistema
+```javascript
+// Secuencia de eventos:
+// 1. Pago exitoso → Licencia SOLD
+// 2. Error posterior en el sistema
+// 3. Orden queda en estado inconsistente
+// 4. Timeout después de 30 minutos → Libera licencia
+```
+
+### 2. Múltiples Transacciones
+```javascript
+// Secuencia de eventos:
+// 1. Cliente intenta pagar varias veces
+// 2. Una transacción falla, otra funciona
+// 3. Sistema libera licencias de transacciones fallidas
+```
+
+### 3. Cancelación Manual
+```javascript
+// Secuencia de eventos:
+// 1. Admin cancela orden manualmente
+// 2. Sistema libera licencias SOLD asociadas
+```
+
+## Configuración del Sistema
+
+### Variables de Entorno
+```bash
+# Tiempo antes de cancelar órdenes sin pago
+ORDER_TIMEOUT_MINUTES=30
+
+# Job se ejecuta cada 10 minutos
+# Configurado en src/jobs/scheduler.js
+```
+
+### Job de Timeout
+```javascript
+// src/jobs/orderTimeout.js
+class OrderTimeoutJob {
+  constructor() {
+    this.timeoutMinutes = process.env.ORDER_TIMEOUT_MINUTES || 30
+  }
+  
+  // Se ejecuta cada 10 minutos
+  getCronConfig() {
+    return {
+      cronTime: '*/10 * * * *'  // Every 10 minutes
+    }
+  }
+}
+```
+
+## Ejemplos Prácticos
+
+### Ejemplo 1: Venta Exitosa
+```
+Cliente: "Quiero el curso avanzado"
+Sistema: Crea orden #8, licencia sigue AVAILABLE
+
+Cliente: Paga exitosamente
+Sistema: Recibe webhook PAID
+Sistema: Licencia #19 → SOLD, asignada a orden #8
+Sistema: Orden #8 → COMPLETED
+Sistema: Envía email con licencia
+
+Resultado: Licencia #19 nunca se libera (ya es del cliente)
+```
+
+### Ejemplo 2: Cliente No Paga
+```
+Cliente: "Quiero el curso avanzado"
+Sistema: Crea orden #9, licencia sigue AVAILABLE
+
+Cliente: No paga en 30 minutos
+Sistema: Cancela orden #9
+Sistema: Licencia sigue AVAILABLE (nunca se reservó)
+
+Resultado: Licencia disponible para otros clientes
+```
+
+### Ejemplo 3: Error del Sistema
+```
+Cliente: "Quiero el curso avanzado"
+Sistema: Crea orden #10, licencia sigue AVAILABLE
+
+Cliente: Paga exitosamente
+Sistema: Recibe webhook PAID
+Sistema: Licencia #20 → SOLD, asignada a orden #10
+Sistema: Error en el sistema
+Sistema: Orden #10 queda en PENDING
+
+30 minutos después:
+Sistema: Timeout detecta orden #10 expirada
+Sistema: Cancela orden #10
+Sistema: Licencia #20 → AVAILABLE (liberada)
+
+Resultado: Licencia #20 vuelve al stock
+```
+
+## Logs Importantes
+
+### Reserva de Licencia
+```javascript
+[20:25:26.350] info: TransactionHandler: License reserved
+{
+  "licenseId": 19,
+  "orderId": 8,
+  "productRef": "CURSO-AVANZADO"
+}
+```
+
+### Liberación de Licencia
+```javascript
+[20:55:26.350] info: order:timeout.processed
+{
+  "orderId": 8,
+  "licensesReturned": 1
+}
+```
+
+### Timeout de Orden
+```javascript
+[20:55:26.350] info: order:timeout
+{
+  "orderId": 8,
+  "customerId": 5,
+  "productRef": "CURSO-AVANZADO"
+}
+```
+
+## Preguntas Frecuentes
+
+### ¿Por qué no se reservan las licencias al crear la orden?
+**Respuesta**: Para evitar bloquear licencias para clientes que no pagan. Si se reservaran al crear la orden, las licencias quedarían bloqueadas por 30 minutos sin garantía de pago.
+
+### ¿Qué pasa si se agotan las licencias?
+**Respuesta**: El sistema mostrará "No available licenses" y no permitirá crear más órdenes para ese producto.
+
+### ¿Se pueden liberar licencias manualmente?
+**Respuesta**: Sí, los administradores pueden:
+- Cancelar órdenes manualmente
+- Anular licencias específicas
+- Devolver licencias al stock
+
+### ¿Cuánto tiempo espera el sistema antes de liberar licencias?
+**Respuesta**: 30 minutos por defecto, configurable con `ORDER_TIMEOUT_MINUTES`.
+
+## Monitoreo y Debugging
+
+### Verificar Estado de Licencias
 ```sql
--- Tabla productos
-products: {
-  id: SERIAL PRIMARY KEY,
-  product_ref: VARCHAR UNIQUE,  -- Clave de vinculación
-  license_type: BOOLEAN,        -- Habilita gestión de licencias
-  -- otros campos...
-}
+-- Ver todas las licencias de un producto
+SELECT id, status, orderId, soldAt 
+FROM licenses 
+WHERE productRef = 'CURSO-AVANZADO';
 
--- Tabla licencias
-licenses: {
-  id: SERIAL PRIMARY KEY,
-  product_ref: VARCHAR,         -- FK hacia products.product_ref
-  license_key: VARCHAR UNIQUE,
-  status: ENUM('AVAILABLE', 'RESERVED', 'SOLD', 'ANNULLED', 'RETURNED'),
-  -- otros campos...
-}
+-- Ver licencias vendidas
+SELECT id, orderId, soldAt 
+FROM licenses 
+WHERE status = 'SOLD';
+
+-- Ver licencias disponibles
+SELECT COUNT(*) as available 
+FROM licenses 
+WHERE status = 'AVAILABLE' AND productRef = 'CURSO-AVANZADO';
 ```
 
-### Validaciones de Integridad
-
-#### Creación de Licencias
-- ✅ Verifica que el producto existe (`product_ref` válido)
-- ✅ Verifica que `license_type: true` en el producto
-- ❌ Falla si el producto no soporta licencias
-
-#### Importación Masiva CSV
-- ✅ Valida todos los `product_ref` del CSV
-- ✅ Verifica que todos los productos tengan `license_type: true`
-- ❌ Falla si algún producto no existe o no soporta licencias
-
-## Casos de Uso
-
-### 1. Producto Digital con Inventario de Licencias
-
-#### Paso 1: Crear Producto
-```http
-POST /api/products
-Content-Type: application/json
-Authorization: Bearer <EDITOR_TOKEN>
-
-{
-  "name": "Software Contable Pro - Licencia Anual",
-  "productRef": "SOFT-CONTABLE-PRO-1Y",
-  "price": 29900,
-  "currency": "USD",
-  "license_type": true,
-  "description": "Licencia anual para Software Contable Pro con soporte incluido",
-  "features": "Facturación ilimitada, Reportes avanzados, Soporte 24/7",
-  "provider": "TechSoft Inc"
-}
-```
-
-#### Paso 2: Importar Licencias Masivamente
-```http
-POST /api/licenses/upload
-Content-Type: multipart/form-data
-Authorization: Bearer <EDITOR_TOKEN>
-
-file: licenses.csv
-```
-
-**Contenido del CSV:**
-```csv
-productRef,licenseKey,instructions
-SOFT-CONTABLE-PRO-1Y,SCP-2024-001-AAA,Descargar desde https://example.com/download?key=SCP-2024-001-AAA
-SOFT-CONTABLE-PRO-1Y,SCP-2024-001-BBB,Descargar desde https://example.com/download?key=SCP-2024-001-BBB
-SOFT-CONTABLE-PRO-1Y,SCP-2024-001-CCC,Descargar desde https://example.com/download?key=SCP-2024-001-CCC
-```
-
-#### Paso 3: Gestionar Inventario
-```http
-GET /api/licenses?productRef=SOFT-CONTABLE-PRO-1Y&status=AVAILABLE
-Authorization: Bearer <READ_ONLY_TOKEN>
-```
-
-### 2. Producto de Servicio (Sin Licencias)
-
-#### Crear Producto de Servicio
-```http
-POST /api/products
-Content-Type: application/json
-Authorization: Bearer <EDITOR_TOKEN>
-
-{
-  "name": "Consultoría en Implementación ERP",
-  "productRef": "CONSULT-ERP-IMPL",
-  "price": 150000,
-  "currency": "USD",
-  "license_type": false,
-  "description": "Servicio de consultoría para implementación de ERP",
-  "provider": "Consulting Corp"
-}
-```
-
-#### Intento de Crear Licencia (Fallará)
-```http
-POST /api/licenses
-Content-Type: application/json
-Authorization: Bearer <EDITOR_TOKEN>
-
-{
-  "productRef": "CONSULT-ERP-IMPL",
-  "licenseKey": "INVALID-KEY-123",
-  "instructions": "No aplica para servicios"
-}
-```
-
-**Respuesta (Error):**
-```json
-{
-  "success": false,
-  "message": "Product CONSULT-ERP-IMPL does not support licenses. Set license_type to true first."
-}
-```
-
-## Estados del Ciclo de Vida
-
-### Estados de Licencias
-1. **AVAILABLE**: Licencia lista para asignar
-2. **RESERVED**: Temporalmente reservada (carrito de compras)
-3. **SOLD**: Vendida y entregada al cliente
-4. **ANNULLED**: Anulada por problemas/devoluciones
-5. **RETURNED**: Devuelta al inventario desde estado SOLD
-
-### Transiciones Permitidas
-```
-AVAILABLE → RESERVED → SOLD
-AVAILABLE → SOLD (venta directa)
-SOLD → RETURNED (devolución)
-ANY_STATE → ANNULLED (anulación admin)
-```
-
-## Operaciones Administrativas
-
-### Anular Licencia
-```http
-POST /api/licenses/SCP-2024-001-AAA/annul
-Authorization: Bearer <SUPER_ADMIN_TOKEN>
-```
-- Cambia `license_key` a formato `ANULADA-{last5}`
-- Estado a `ANNULLED`
-- Limpia `orderId` y `reservedAt`
-
-### Devolver Licencia al Inventario
-```http
-POST /api/licenses/SCP-2024-001-BBB/return
-Authorization: Bearer <SUPER_ADMIN_TOKEN>
-```
-- Solo licencias en estado `SOLD`
-- Estado a `RETURNED`
-- Limpia `orderId` y `soldAt`
-- Establece `reservedAt` a fecha actual
-
-## Validaciones de Negocio
-
-### Reglas para Productos
-- `productRef` debe ser único en toda la tabla
-- `license_type` no se puede cambiar si existen licencias activas
-- Productos con `license_type: false` no aparecen en filtros de licencias
-
-### Reglas para Licencias
-- `licenseKey` debe ser único globalmente
-- No se puede cambiar `licenseKey` de licencias SOLD
-- `productRef` debe corresponder a producto con `license_type: true`
-
-## Consultas Útiles
-
-### Productos con Inventario de Licencias
-```http
-GET /api/products?license_type=true
-```
-
-### Licencias Disponibles por Producto
-```http
-GET /api/licenses?productRef=SOFT-CONTABLE-PRO-1Y&status=AVAILABLE
-```
-
-### Reporte de Inventario
-```http
-GET /api/licenses?groupBy=status
-```
-
-## Logging y Trazabilidad
-
-### Eventos Registrados
-- Creación de producto con `license_type: true`
-- Importación masiva de licencias
-- Cambios de estado de licencias
-- Validaciones fallidas de integración
-
-### Formato de Logs
-```json
-{
-  "timestamp": "2024-03-14T10:15:30.123Z",
-  "level": "info",
-  "message": "Business Operation [createLicense]",
-  "productRef": "SOFT-CONTABLE-PRO-1Y",
-  "licenseKey": "SCP-2024-001-AAA",
-  "status": "AVAILABLE"
-}
-```
-
-## Mejores Prácticas
-
-### Para Desarrolladores
-1. **Validar siempre** `license_type` antes de operaciones de licencias
-2. **Usar transacciones** para operaciones que afecten múltiples licencias
-3. **Implementar retry logic** para operaciones concurrentes
-4. **Loggear todas las operaciones** con contexto de negocio
-
-### Para Administradores
-1. **Configurar productos** con `license_type: true` antes de importar licencias
-2. **Usar CSV template** para importaciones masivas
-3. **Monitorear logs** para detectar problemas de integración
-4. **Realizar backups** antes de operaciones masivas
-
-## Solución de Problemas
-
-### Error: "Product does not support licenses"
-- **Causa**: `license_type: false` en el producto
-- **Solución**: Actualizar producto con `license_type: true`
-
-### Error: "Product not found"
-- **Causa**: `productRef` no existe en tabla products
-- **Solución**: Verificar `productRef` o crear el producto
-
-### Error: "Only SOLD licenses can be returned"
-- **Causa**: Intentar devolver licencia que no está SOLD
-- **Solución**: Verificar estado actual de la licencia
-
-## Performance y Escalabilidad
-
-### Índices Recomendados
+### Verificar Órdenes con Licencias
 ```sql
-CREATE INDEX idx_licenses_product_ref ON licenses(product_ref);
-CREATE INDEX idx_licenses_status ON licenses(status);
-CREATE INDEX idx_products_license_type ON products(license_type);
+-- Ver órdenes que tienen licencias asignadas
+SELECT o.id, o.status, l.id as licenseId, l.status as licenseStatus
+FROM orders o
+JOIN licenses l ON o.id = l.orderId
+WHERE o.productRef = 'CURSO-AVANZADO';
 ```
 
-### Optimizaciones
-- Paginación en consultas de licencias
-- Bulk operations para importaciones grandes
-- Cache de productos con `license_type: true`
-- Conexión pool para operaciones concurrentes
+### Logs de Debugging
+```bash
+# Buscar logs de reserva de licencias
+grep "License reserved" logs/app.log
+
+# Buscar logs de timeout
+grep "order:timeout" logs/app.log
+
+# Buscar logs de liberación
+grep "licensesReturned" logs/app.log
+```
+
+## Configuración Avanzada
+
+### Cambiar Tiempo de Timeout
+```bash
+# En .env
+ORDER_TIMEOUT_MINUTES=15  # 15 minutos en lugar de 30
+```
+
+### Cambiar Frecuencia del Job
+```javascript
+// En src/jobs/scheduler.js
+case 'orderTimeout':
+  intervalMs = 5 * 60 * 1000  // 5 minutos en lugar de 10
+  break
+```
+
+### Agregar Notificaciones
+```javascript
+// En src/jobs/orderTimeout.js
+if (reservedLicenses.length > 0) {
+  // Notificar a admin sobre licencias liberadas
+  await notifyAdmin({
+    type: 'LICENSES_LIBERATED',
+    orderId: order.id,
+    licensesCount: reservedLicenses.length
+  })
+}
+```
+
+---
+
+**Versión**: 1.0  
+**Última actualización**: Junio 2025  
+**Mantenedores**: Equipo Innovate Learning
