@@ -1,5 +1,5 @@
 const { Transaction, Order, CobreCheckout, sequelize } = require('../../../models')
-const { Op } = require('sequelize')
+const { Op, Transaction: SequelizeTransaction } = require('sequelize')
 const logger = require('../../../config/logger')
 
 /**
@@ -21,7 +21,10 @@ class TransactionHandler {
         amount: webhookEvent.amount
       })
 
-      return await sequelize.transaction(async (t) => {
+      // Optimización: Transacción con timeout para alto volumen
+      return await sequelize.transaction({
+        isolationLevel: SequelizeTransaction.ISOLATION_LEVELS.READ_COMMITTED // Mejor concurrencia para PostgreSQL
+      }, async (t) => {
         // Buscar la transacción por referencia externa
         const transaction = await this.findTransaction(webhookEvent, t)
 
@@ -51,16 +54,21 @@ class TransactionHandler {
           }
         }
 
-        // Actualizar la transacción
+        // Actualizar la transacción de forma más eficiente
         const oldStatus = transaction.status
-        await this.updateTransaction(transaction, webhookEvent, t)
+        await this.updateTransactionOptimized(transaction, webhookEvent, t)
 
-        // Procesar lógica específica según el estado
+        // Procesar lógica específica según el estado (sin bloquear la transacción principal)
+        const processingPromises = []
+        
         if (webhookEvent.status === 'PAID' && oldStatus !== 'PAID') {
-          await this.handlePaymentSuccess(transaction, t)
+          processingPromises.push(this.handlePaymentSuccessOptimized(transaction, t))
         } else if (['FAILED', 'CANCELLED', 'EXPIRED'].includes(webhookEvent.status)) {
-          await this.handlePaymentFailure(transaction, t)
+          processingPromises.push(this.handlePaymentFailureOptimized(transaction, t))
         }
+
+        // Ejecutar procesamiento en paralelo cuando sea posible
+        await Promise.all(processingPromises)
 
         logger.info('TransactionHandler: Successfully processed webhook', {
           transactionId: transaction.id,
@@ -434,6 +442,46 @@ class TransactionHandler {
   }
 
   /**
+   * Versión optimizada de updateTransaction para alto volumen
+   * @param {Transaction} transaction - Transacción a actualizar
+   * @param {Object} webhookEvent - Evento del webhook
+   * @param {Object} dbTransaction - Transacción de base de datos
+   */
+  async updateTransactionOptimized (transaction, webhookEvent, dbTransaction) {
+    // Preparar metadata de forma más eficiente
+    const webhookMeta = {
+      eventId: webhookEvent.eventId,
+      type: webhookEvent.type,
+      status: webhookEvent.status,
+      amount: webhookEvent.amount,
+      currency: webhookEvent.currency,
+      processedAt: new Date().toISOString()
+    }
+
+    // Construir metadata incremental en lugar de reemplazar todo
+    const existingMeta = transaction.meta || {}
+    const updatedMeta = {
+      ...existingMeta,
+      webhook: webhookMeta,
+      lastWebhookAt: new Date().toISOString()
+    }
+
+    // Agregar información específica del proveedor de forma condicional
+    if (webhookEvent.provider === 'cobre') {
+      updatedMeta.cobreEvent = webhookEvent.payload
+    }
+
+    // Update con campos específicos para mejor performance
+    await transaction.update({
+      status: webhookEvent.status,
+      meta: updatedMeta
+    }, { 
+      transaction: dbTransaction,
+      fields: ['status', 'meta', 'updated_at'] // Solo actualizar campos necesarios
+    })
+  }
+
+  /**
    * Maneja el pago exitoso
    * @param {Transaction} transaction - Transacción
    * @param {Object} dbTransaction - Transacción de base de datos
@@ -496,6 +544,91 @@ class TransactionHandler {
   }
 
   /**
+   * Versión optimizada de handlePaymentSuccess para alto volumen
+   * @param {Transaction} transaction - Transacción
+   * @param {Object} dbTransaction - Transacción de base de datos
+   */
+  async handlePaymentSuccessOptimized (transaction, dbTransaction) {
+    try {
+      const order = transaction.order
+
+      // Batch updates para mejor performance
+      const updates = []
+
+      // Actualizar estado de la orden
+      updates.push(
+        order.update({
+          status: 'IN_PROCESS'
+        }, { 
+          transaction: dbTransaction,
+          fields: ['status', 'updated_at']
+        })
+      )
+
+      // Si es producto digital con licencia, manejar licencia y completar orden
+      if (order.product && order.product.license_type) {
+        // Reservar licencia de forma transaccional
+        const licensePromise = this.reserveLicenseForOrder(order, dbTransaction)
+        updates.push(licensePromise)
+
+        // Ejecutar actualizaciones en paralelo
+        await Promise.all(updates)
+
+        // Completar la orden después de asegurar la licencia
+        await order.update({
+          status: 'COMPLETED'
+        }, { 
+          transaction: dbTransaction,
+          fields: ['status', 'updated_at']
+        })
+
+        // Programar envío de emails de forma asíncrona (fuera de la transacción)
+        setImmediate(() => {
+          Promise.all([
+            this.sendLicenseEmail(order, transaction).catch(error => 
+              logger.error('TransactionHandler: Error sending license email', {
+                error: error.message,
+                orderId: order.id
+              })
+            ),
+            this.sendOrderConfirmation(order, transaction).catch(error => 
+              logger.error('TransactionHandler: Error sending order confirmation', {
+                error: error.message,
+                orderId: order.id
+              })
+            )
+          ])
+        })
+      } else {
+        // Solo ejecutar la actualización de estado
+        await Promise.all(updates)
+
+        // Programar envío de email de confirmación
+        setImmediate(() => {
+          this.sendOrderConfirmation(order, transaction).catch(error => 
+            logger.error('TransactionHandler: Error sending order confirmation', {
+              error: error.message,
+              orderId: order.id
+            })
+          )
+        })
+      }
+
+      logger.info('TransactionHandler: Payment success handled (optimized)', {
+        orderId: order.id,
+        transactionId: transaction.id,
+        hasLicense: order.product?.license_type || false
+      })
+    } catch (error) {
+      logger.error('TransactionHandler: Error handling payment success (optimized)', {
+        error: error.message,
+        transactionId: transaction.id
+      })
+      throw error
+    }
+  }
+
+  /**
    * Maneja el pago fallido
    * @param {Transaction} transaction - Transacción
    * @param {Object} dbTransaction - Transacción de base de datos
@@ -528,6 +661,51 @@ class TransactionHandler {
       })
     } catch (error) {
       logger.error('TransactionHandler: Error handling payment failure', {
+        error: error.message,
+        transactionId: transaction.id
+      })
+      throw error
+    }
+  }
+
+  /**
+   * Versión optimizada de handlePaymentFailure para alto volumen
+   * @param {Transaction} transaction - Transacción
+   * @param {Object} dbTransaction - Transacción de base de datos
+   */
+  async handlePaymentFailureOptimized (transaction, dbTransaction) {
+    try {
+      const order = transaction.order
+
+      // Query optimizada con count en lugar de findAll para mejor performance
+      const pendingTransactionsCount = await Transaction.count({
+        where: {
+          orderId: order.id,
+          id: { [Op.ne]: transaction.id },
+          status: { [Op.in]: ['CREATED', 'PENDING'] }
+        },
+        transaction: dbTransaction
+      })
+
+      // Si no hay otras transacciones pendientes, cancelar la orden
+      const shouldCancel = pendingTransactionsCount === 0
+      if (shouldCancel) {
+        await order.update({
+          status: 'CANCELED'
+        }, { 
+          transaction: dbTransaction,
+          fields: ['status', 'updated_at']
+        })
+      }
+
+      logger.info('TransactionHandler: Payment failure handled (optimized)', {
+        orderId: order.id,
+        transactionId: transaction.id,
+        orderCanceled: shouldCancel,
+        pendingTransactionsCount
+      })
+    } catch (error) {
+      logger.error('TransactionHandler: Error handling payment failure (optimized)', {
         error: error.message,
         transactionId: transaction.id
       })

@@ -2,7 +2,7 @@ const { Sequelize } = require('sequelize')
 const config = require('../config')
 const logger = require('../config/logger')
 
-// Crear instancia de Sequelize
+// Crear instancia de Sequelize con configuración optimizada para alto volumen
 const sequelize = new Sequelize(
   config.DB_CONFIG.database,
   config.DB_CONFIG.username,
@@ -22,7 +22,27 @@ const sequelize = new Sequelize(
       underscored: true
     },
     benchmark: true,
-    timezone: 'America/Bogota'
+    timezone: 'America/Bogota',
+    // Configuración de connection pool para alto volumen
+    pool: {
+      max: process.env.DB_POOL_MAX ? parseInt(process.env.DB_POOL_MAX) : 20, // Máximo 20 conexiones
+      min: process.env.DB_POOL_MIN ? parseInt(process.env.DB_POOL_MIN) : 5,   // Mínimo 5 conexiones
+      acquire: process.env.DB_POOL_ACQUIRE ? parseInt(process.env.DB_POOL_ACQUIRE) : 30000, // 30 segundos para adquirir
+      idle: process.env.DB_POOL_IDLE ? parseInt(process.env.DB_POOL_IDLE) : 10000,           // 10 segundos idle
+      evict: process.env.DB_POOL_EVICT ? parseInt(process.env.DB_POOL_EVICT) : 1000          // 1 segundo para evict
+    },
+    // Configuración de timeouts
+    dialectOptions: {
+      connectTimeout: process.env.DB_CONNECT_TIMEOUT ? parseInt(process.env.DB_CONNECT_TIMEOUT) : 60000, // 60 segundos
+      acquireTimeout: process.env.DB_ACQUIRE_TIMEOUT ? parseInt(process.env.DB_ACQUIRE_TIMEOUT) : 60000, // 60 segundos
+      timeout: process.env.DB_QUERY_TIMEOUT ? parseInt(process.env.DB_QUERY_TIMEOUT) : 60000              // 60 segundos
+    },
+    // Configuración de retry
+    retry: {
+      max: process.env.DB_RETRY_MAX ? parseInt(process.env.DB_RETRY_MAX) : 3,  // 3 reintentos
+      timeout: process.env.DB_RETRY_TIMEOUT ? parseInt(process.env.DB_RETRY_TIMEOUT) : 3000  // 3 segundos entre reintentos
+    }
+    // Nota: isolationLevel y transactionType se configuran por transacción individual
   }
 )
 

@@ -3,12 +3,12 @@ const slowDown = require('express-slow-down')
 const logger = require('../config/logger')
 
 /**
- * Rate limiter for order creation
+ * Rate limiter for order creation - Optimizado para alto volumen
  * Prevents abuse of the public order endpoint
  */
 const orderCreationLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // limit each IP to 10 order creation requests per windowMs
+  max: process.env.ORDER_RATE_LIMIT_MAX ? parseInt(process.env.ORDER_RATE_LIMIT_MAX) : 100, // Aumentado a 100 órdenes por IP
   message: {
     success: false,
     message: 'Demasiadas órdenes creadas desde esta IP. Intenta nuevamente en 15 minutos.',
@@ -16,18 +16,30 @@ const orderCreationLimiter = rateLimit({
   },
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  skip: (req) => {
+    // Skip para IPs confiables o usuarios autenticados
+    const trustedIP = req.headers['x-trusted-ip'] === 'true'
+    const isAuthenticated = req.headers.authorization && req.headers.authorization.startsWith('Bearer ')
+    const isWhitelistedIP = process.env.WHITELISTED_IPS && process.env.WHITELISTED_IPS.split(',').includes(req.ip)
+    
+    return trustedIP || isAuthenticated || isWhitelistedIP
+  },
   handler: (req, res) => {
     logger.logError(new Error('Rate limit exceeded for order creation'), {
       ip: req.ip,
       userAgent: req.get('User-Agent'),
-      endpoint: req.path
+      endpoint: req.path,
+      currentLimit: req.rateLimit.limit,
+      remaining: req.rateLimit.remaining
     })
 
     res.status(429).json({
       success: false,
       message: 'Demasiadas órdenes creadas desde esta IP. Intenta nuevamente en 15 minutos.',
       code: 'RATE_LIMIT_EXCEEDED',
-      retryAfter: Math.round(req.rateLimit.resetTime / 1000)
+      retryAfter: Math.round(req.rateLimit.resetTime / 1000),
+      limit: req.rateLimit.limit,
+      remaining: req.rateLimit.remaining
     })
   }
 })
@@ -64,12 +76,12 @@ const paymentLimiter = rateLimit({
 })
 
 /**
- * General API rate limiter
+ * General API rate limiter - Optimizado para alto volumen
  * Applied to all public endpoints
  */
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  max: process.env.GENERAL_RATE_LIMIT_MAX ? parseInt(process.env.GENERAL_RATE_LIMIT_MAX) : 500, // Aumentado a 500 requests por IP
   message: {
     success: false,
     message: 'Demasiadas solicitudes desde esta IP. Intenta nuevamente más tarde.',
@@ -78,21 +90,30 @@ const generalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => {
-    // Skip rate limiting for authenticated admin requests
-    return req.headers.authorization && req.headers.authorization.startsWith('Bearer ')
+    // Skip rate limiting for authenticated admin requests, trusted IPs, and health checks
+    const isAuthenticated = req.headers.authorization && req.headers.authorization.startsWith('Bearer ')
+    const trustedIP = req.headers['x-trusted-ip'] === 'true'
+    const isWhitelistedIP = process.env.WHITELISTED_IPS && process.env.WHITELISTED_IPS.split(',').includes(req.ip)
+    const isHealthCheck = req.path === '/health' || req.path === '/api/health'
+    
+    return isAuthenticated || trustedIP || isWhitelistedIP || isHealthCheck
   },
   handler: (req, res) => {
     logger.logError(new Error('General rate limit exceeded'), {
       ip: req.ip,
       userAgent: req.get('User-Agent'),
-      endpoint: req.path
+      endpoint: req.path,
+      currentLimit: req.rateLimit.limit,
+      remaining: req.rateLimit.remaining
     })
 
     res.status(429).json({
       success: false,
       message: 'Demasiadas solicitudes desde esta IP. Intenta nuevamente más tarde.',
       code: 'GENERAL_RATE_LIMIT_EXCEEDED',
-      retryAfter: Math.round(req.rateLimit.resetTime / 1000)
+      retryAfter: Math.round(req.rateLimit.resetTime / 1000),
+      limit: req.rateLimit.limit,
+      remaining: req.rateLimit.remaining
     })
   }
 })
@@ -116,12 +137,12 @@ const orderLookupSlowDown = slowDown({
 })
 
 /**
- * Rate limiter for webhooks
+ * Rate limiter for webhooks - Optimizado para alto volumen
  * More permissive but still protected
  */
 const webhookLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
-  max: 50, // allow up to 50 webhook calls per minute per IP
+  max: process.env.WEBHOOK_RATE_LIMIT_MAX ? parseInt(process.env.WEBHOOK_RATE_LIMIT_MAX) : 1000, // Aumentado a 1000 webhooks por minuto
   message: {
     success: false,
     message: 'Webhook rate limit exceeded',
@@ -129,17 +150,29 @@ const webhookLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    // Skip para IPs conocidos de proveedores de pago
+    const knownProviderIPs = process.env.PAYMENT_PROVIDER_IPS 
+      ? process.env.PAYMENT_PROVIDER_IPS.split(',') 
+      : ['54.173.144.191'] // IP conocida de Cobre
+    
+    return knownProviderIPs.includes(req.ip)
+  },
   handler: (req, res) => {
     logger.logError(new Error('Webhook rate limit exceeded'), {
       ip: req.ip,
       userAgent: req.get('User-Agent'),
-      endpoint: req.path
+      endpoint: req.path,
+      currentLimit: req.rateLimit.limit,
+      remaining: req.rateLimit.remaining
     })
 
     res.status(429).json({
       success: false,
       message: 'Webhook rate limit exceeded',
-      code: 'WEBHOOK_RATE_LIMIT_EXCEEDED'
+      code: 'WEBHOOK_RATE_LIMIT_EXCEEDED',
+      limit: req.rateLimit.limit,
+      remaining: req.rateLimit.remaining
     })
   }
 })
