@@ -1,6 +1,7 @@
 const { Order, Transaction, License, sequelize } = require('../models')
 const { Op } = require('sequelize')
 const logger = require('../config/logger')
+const TransactionManager = require('../utils/transactionManager')
 
 /**
  * Order timeout job - cancels orders that have been pending too long
@@ -91,7 +92,7 @@ class OrderTimeoutJob {
    * Process a single expired order
    */
   async processExpiredOrder (order) {
-    return await sequelize.transaction(async (transaction) => {
+    return await TransactionManager.executeWebhookTransaction(async (t) => {
       logger.logBusiness('order:timeout', {
         orderId: order.id,
         customerId: order.customerId,
@@ -102,7 +103,7 @@ class OrderTimeoutJob {
       // Update order status to CANCELED
       await order.update({
         status: 'CANCELED'
-      }, { transaction })
+      }, { transaction: t })
 
       // Update all related transactions to FAILED
       await Transaction.update(
@@ -112,7 +113,7 @@ class OrderTimeoutJob {
             orderId: order.id,
             status: { [Op.in]: ['CREATED', 'PENDING'] }
           },
-          transaction
+          transaction: t
         }
       )
 
@@ -122,7 +123,7 @@ class OrderTimeoutJob {
           orderId: order.id,
           status: { [Op.in]: ['RESERVED', 'SOLD'] }
         },
-        transaction
+        transaction: t
       })
 
       if (reservedLicenses.length > 0) {
@@ -132,7 +133,7 @@ class OrderTimeoutJob {
             orderId: null,
             reservedAt: null,
             soldAt: null
-          }, { transaction })
+          }, { transaction: t })
 
           logger.logBusiness('license:returned', {
             licenseId: license.id,
@@ -175,7 +176,7 @@ class OrderTimeoutJob {
   getCronConfig () {
     return {
       name: this.name,
-      cronTime: '*/5 * * * *', // Every 5 minutes
+      cronTime: '*/10 * * * *', // Every 10 minutes (changed from 5)
       onTick: () => this.run(),
       start: false,
       timeZone: 'America/Bogota'

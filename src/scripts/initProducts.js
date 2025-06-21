@@ -1,5 +1,6 @@
 const { Product, License, sequelize } = require('../models')
 const logger = require('../config/logger')
+const TransactionManager = require('../utils/transactionManager')
 
 async function generateLicenseKey (productRef) {
   const timestamp = Date.now().toString(36)
@@ -8,9 +9,7 @@ async function generateLicenseKey (productRef) {
 }
 
 async function initializeProducts () {
-  const t = await sequelize.transaction()
-
-  try {
+  return await TransactionManager.executeBulkTransaction(async (t) => {
     logger.info('🚀 Iniciando carga de productos y licencias...')
 
     // Producto 1: Curso Básico
@@ -67,7 +66,6 @@ async function initializeProducts () {
 
     logger.info('✅ Licencias creadas para:', cursoAvanzado.productRef)
 
-    await t.commit()
     logger.info('🎉 Inicialización completada exitosamente!')
 
     // Mostrar resumen
@@ -87,11 +85,7 @@ async function initializeProducts () {
         logger.info(`   - ${license.licenseKey} (${license.status})`)
       })
     })
-  } catch (error) {
-    await t.rollback()
-    logger.error('❌ Error durante la inicialización:', error)
-    throw error
-  }
+  }, { recordsCount: 8 }) // 2 productos + 6 licencias
 }
 
 // Ejecutar el script

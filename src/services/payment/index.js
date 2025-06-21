@@ -2,6 +2,8 @@ const { Transaction, Order, Product, CobreCheckout, sequelize } = require('../..
 const { Op } = require('sequelize')
 const logger = require('../../config/logger')
 const emailService = require('../email')
+const TransactionManager = require('../../utils/transactionManager')
+const AuthenticationManager = require('../../utils/authenticationManager')
 
 // Payment providers
 const MockProvider = require('./providers/mock')
@@ -21,6 +23,27 @@ class PaymentService {
       // payu: new PayUProvider()
     }
     this.initialized = false
+    
+    // Registrar providers que requieren autenticación en el AuthenticationManager
+    this.registerAuthProviders()
+  }
+
+  /**
+   * Registra providers que requieren autenticación
+   * @private
+   */
+  registerAuthProviders() {
+    // Registrar providers que tienen método authenticate
+    Object.entries(this.providers).forEach(([name, provider]) => {
+      if (provider && typeof provider.authenticate === 'function') {
+        try {
+          AuthenticationManager.registerProvider(name, provider)
+          logger.debug(`PaymentService: Registered ${name} with AuthenticationManager`)
+        } catch (error) {
+          logger.warn(`PaymentService: Failed to register ${name} with AuthenticationManager: ${error.message}`)
+        }
+      }
+    })
   }
 
   /**
@@ -122,19 +145,25 @@ class PaymentService {
   }
 
   /**
-   * Get payment provider instance
+   * Get payment provider instance with thread-safe authentication
    */
-  getProvider (providerName) {
+  async getProvider (providerName) {
     const provider = this.providers[providerName]
     if (!provider) {
       throw new Error(`Payment provider '${providerName}' not supported`)
     }
 
-    // Check if provider is ready
-    if (!this.isProviderReady(providerName)) {
-      throw new Error(`Payment provider '${providerName}' is not ready or authenticated`)
+    // For providers that require authentication, use AuthenticationManager
+    if (typeof provider.authenticate === 'function') {
+      try {
+        return await AuthenticationManager.getAuthenticatedProvider(providerName)
+      } catch (error) {
+        logger.error(`Failed to get authenticated provider '${providerName}':`, error.message)
+        throw new Error(`Payment provider '${providerName}' authentication failed: ${error.message}`)
+      }
     }
 
+    // For providers without authentication (like mock), return directly
     return provider
   }
 
@@ -145,7 +174,7 @@ class PaymentService {
     try {
       logger.logBusiness('payment:createIntent', { orderId, options })
 
-      return await sequelize.transaction(async (t) => {
+      return await TransactionManager.executePaymentTransaction(async (t) => {
         // First, get order with lock WITHOUT includes to avoid FOR UPDATE with outer joins
         const order = await Order.findByPk(orderId, {
           lock: t.LOCK.UPDATE,
@@ -200,7 +229,7 @@ class PaymentService {
         }
 
         // Get payment provider
-        const provider = this.getProvider(transaction.gateway)
+        const provider = await this.getProvider(transaction.gateway)
 
         // Create payment intent with provider
         const intentResult = await provider.createIntent({ order, transaction, product })
@@ -270,10 +299,10 @@ class PaymentService {
       })
 
       // Get provider and parse webhook
-      const provider = this.getProvider(providerName)
+      const provider = await this.getProvider(providerName)
       const webhookData = provider.parseWebhook(req)
 
-      return await sequelize.transaction(async (t) => {
+      return await TransactionManager.executeWebhookTransaction(async (t) => {
         // Find transaction by gateway reference
         const transaction = await Transaction.findOne({
           where: {

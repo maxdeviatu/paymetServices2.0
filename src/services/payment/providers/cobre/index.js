@@ -53,6 +53,10 @@ class CobreProvider {
     return auth.authenticate()
   }
 
+  async refreshToken () {
+    return auth.refreshToken()
+  }
+
   getAuthHeaders () {
     return auth.getAuthHeaders()
   }

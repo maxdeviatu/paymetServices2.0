@@ -66,7 +66,7 @@ class JobScheduler {
 
       switch (jobName) {
         case 'orderTimeout':
-          intervalMs = 5 * 60 * 1000 // 5 minutes
+          intervalMs = 10 * 60 * 1000 // 10 minutes
           break
         default:
           intervalMs = 10 * 60 * 1000 // 10 minutes default

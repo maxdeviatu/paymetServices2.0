@@ -1,5 +1,6 @@
 const licenseService = require('../../../services/license.service')
 const { License, Product, sequelize } = require('../../../models')
+const TransactionManager = require('../../../utils/transactionManager')
 
 // Mock de las dependencias
 jest.mock('../../../models', () => ({
@@ -20,6 +21,10 @@ jest.mock('../../../models', () => ({
 }))
 
 jest.mock('../../../config/logger')
+
+jest.mock('../../../utils/transactionManager', () => ({
+  executeInventoryTransaction: jest.fn()
+}))
 
 describe('LicenseService', () => {
   beforeEach(() => {
@@ -166,7 +171,7 @@ describe('LicenseService', () => {
 
     it('should annul license successfully', async () => {
       // Configurar mocks
-      sequelize.transaction.mockImplementation(async (callback) => {
+      TransactionManager.executeInventoryTransaction.mockImplementation(async (callback) => {
         return await callback(mockTransaction)
       })
       License.findOne.mockResolvedValue(mockLicense)
@@ -199,7 +204,7 @@ describe('LicenseService', () => {
 
     it('should throw error if license not found', async () => {
       // Configurar mocks
-      sequelize.transaction.mockImplementation(async (callback) => {
+      TransactionManager.executeInventoryTransaction.mockImplementation(async (callback) => {
         return await callback(mockTransaction)
       })
       License.findOne.mockResolvedValue(null)
@@ -211,7 +216,7 @@ describe('LicenseService', () => {
 
     it('should throw error if license is already SOLD', async () => {
       // Configurar mocks
-      sequelize.transaction.mockImplementation(async (callback) => {
+      TransactionManager.executeInventoryTransaction.mockImplementation(async (callback) => {
         return await callback(mockTransaction)
       })
       const soldLicense = { ...mockLicense, status: 'SOLD' }
@@ -239,7 +244,7 @@ describe('LicenseService', () => {
 
     it('should return license to stock successfully', async () => {
       // Configurar mocks
-      sequelize.transaction.mockImplementation(async (callback) => {
+      TransactionManager.executeInventoryTransaction.mockImplementation(async (callback) => {
         return await callback(mockTransaction)
       })
       License.findOne.mockResolvedValue(mockSoldLicense)
@@ -272,7 +277,7 @@ describe('LicenseService', () => {
 
     it('should throw error if license is not SOLD', async () => {
       // Configurar mocks
-      sequelize.transaction.mockImplementation(async (callback) => {
+      TransactionManager.executeInventoryTransaction.mockImplementation(async (callback) => {
         return await callback(mockTransaction)
       })
       const availableLicense = { ...mockSoldLicense, status: 'AVAILABLE' }
@@ -285,7 +290,7 @@ describe('LicenseService', () => {
 
     it('should throw error if license not found', async () => {
       // Configurar mocks
-      sequelize.transaction.mockImplementation(async (callback) => {
+      TransactionManager.executeInventoryTransaction.mockImplementation(async (callback) => {
         return await callback(mockTransaction)
       })
       License.findOne.mockResolvedValue(null)

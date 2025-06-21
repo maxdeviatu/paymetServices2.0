@@ -9,6 +9,7 @@ const usersRoutes = require('./users.routes')
 const licenseRoutes = require('./license.routes')
 const ordersRoutes = require('./orders.routes')
 const webhookRoutes = require('./webhook.routes')
+const providersRoutes = require('./admin/providers.routes')
 
 // Montar rutas
 router.use('/products', productsRoutes)
@@ -18,5 +19,6 @@ router.use('/users', usersRoutes)
 router.use('/licenses', licenseRoutes)
 router.use('/orders', ordersRoutes)
 router.use('/webhooks', webhookRoutes)
+router.use('/providers', providersRoutes)
 
 module.exports = router

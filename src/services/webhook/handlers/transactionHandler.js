@@ -1,6 +1,7 @@
 const { Transaction, Order, CobreCheckout, sequelize } = require('../../../models')
-const { Op, Transaction: SequelizeTransaction } = require('sequelize')
+const { Op } = require('sequelize')
 const logger = require('../../../config/logger')
+const TransactionManager = require('../../../utils/transactionManager')
 
 /**
  * Handler para procesar eventos de transacciones de webhooks
@@ -21,10 +22,8 @@ class TransactionHandler {
         amount: webhookEvent.amount
       })
 
-      // Optimización: Transacción con timeout para alto volumen
-      return await sequelize.transaction({
-        isolationLevel: SequelizeTransaction.ISOLATION_LEVELS.READ_COMMITTED // Mejor concurrencia para PostgreSQL
-      }, async (t) => {
+      // Optimización: Usar TransactionManager para webhook con configuración optimizada
+      return await TransactionManager.executeWebhookTransaction(async (t) => {
         // Buscar la transacción por referencia externa
         const transaction = await this.findTransaction(webhookEvent, t)
 
@@ -722,7 +721,8 @@ class TransactionHandler {
   async reserveLicenseForOrder (order, dbTransaction) {
     const { License } = require('../../../models')
 
-    // Buscar licencia disponible
+    // Nota: dbTransaction ya viene del TransactionManager con configuración optimizada
+    // Buscar licencia disponible con lock pesimista para prevenir race conditions
     const license = await License.findOne({
       where: {
         productRef: order.productRef,

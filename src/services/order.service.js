@@ -2,6 +2,7 @@ const { Order, Transaction, Product, User, sequelize } = require('../models')
 const { Op } = require('sequelize')
 const logger = require('../config/logger')
 const userService = require('./user.service')
+const TransactionManager = require('../utils/transactionManager')
 
 /**
  * Create order with auto user creation and transaction
@@ -15,7 +16,7 @@ async function createOrder (orderData) {
       customerEmail: orderData.customer?.email
     })
 
-    return await sequelize.transaction(async (t) => {
+    return await TransactionManager.executePaymentTransaction(async (t) => {
       // 1. Get or create customer
       let customerId
       if (orderData.customer) {
@@ -284,7 +285,7 @@ async function cancelOrder (orderId, reason = 'MANUAL') {
   try {
     logger.logBusiness('order:cancel', { orderId, reason })
 
-    return await sequelize.transaction(async (t) => {
+    return await TransactionManager.executePaymentTransaction(async (t) => {
       const order = await Order.findByPk(orderId, {
         include: [{ association: 'transactions' }],
         lock: t.LOCK.UPDATE,

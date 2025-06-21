@@ -1,6 +1,7 @@
 const { License, Product } = require('../models')
 const { sequelize } = require('../models')
 const logger = require('../config/logger')
+const TransactionManager = require('../utils/transactionManager')
 
 /**
  * Create a new license
@@ -89,7 +90,7 @@ async function annul (code, actorId) {
   try {
     logger.logBusiness('annulLicense', { code, actorId })
 
-    return await sequelize.transaction(async (t) => {
+    return await TransactionManager.executeInventoryTransaction(async (t) => {
       const license = await License.findOne({
         where: { licenseKey: code },
         lock: t.LOCK.UPDATE,
@@ -133,7 +134,7 @@ async function returnToStock (code) {
   try {
     logger.logBusiness('returnLicenseToStock', { code })
 
-    return await sequelize.transaction(async (t) => {
+    return await TransactionManager.executeInventoryTransaction(async (t) => {
       const license = await License.findOne({
         where: { licenseKey: code },
         lock: t.LOCK.UPDATE,

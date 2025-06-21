@@ -68,9 +68,20 @@ class CobreAuthService {
    */
   async getAccessToken () {
     if (!this.isTokenValid()) {
+      logger.info('🔄 Token inválido o expirado, re-autenticando...')
       await this.authenticate()
     }
     return this.accessToken
+  }
+
+  /**
+   * Force refresh del token
+   */
+  async refreshToken () {
+    logger.info('🔄 Forzando refresh del token de Cobre...')
+    this.accessToken = null
+    this.tokenExpiration = null
+    return await this.authenticate()
   }
 }
 
