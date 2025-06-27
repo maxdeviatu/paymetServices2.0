@@ -3,6 +3,7 @@ const cors = require('cors')
 const morgan = require('morgan')
 const helmet = require('helmet')
 const { initDB } = require('./models/db')
+require('./models/index.js') // Importa todos los modelos y relaciones antes de sincronizar
 const { createSuperAdmin } = require('./scripts/createSuperAdmin')
 const logger = require('./config/logger')
 const { PORT } = require('./config')

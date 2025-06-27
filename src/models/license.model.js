@@ -25,7 +25,8 @@ const License = sequelize.define('License', {
   },
   status: {
     type: DataTypes.ENUM('AVAILABLE', 'RESERVED', 'SOLD', 'ANNULLED', 'RETURNED'),
-    defaultValue: 'AVAILABLE'
+    defaultValue: 'AVAILABLE',
+    comment: 'RESERVED: Licencia reservada para lista de espera'
   },
   orderId: {
     type: DataTypes.INTEGER,

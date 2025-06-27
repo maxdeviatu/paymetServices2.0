@@ -469,4 +469,17 @@ Si tienes problemas con la configuración:
 
 ---
 
+## ⚙️ Configuración Opcional
+
+### `ENABLE_WAITLIST_PROCESSING`
+- **Descripción**: Habilita o deshabilita el procesamiento automático de la lista de espera
+- **Tipo**: Boolean
+- **Valores permitidos**: `true`, `false`
+- **Por defecto**: `false`
+- **Ejemplo**: `ENABLE_WAITLIST_PROCESSING=false`
+- **Notas**: 
+  - `true`: El job procesa automáticamente la lista de espera cada 30 segundos
+  - `false`: El job se pausa y no procesa automáticamente
+  - Útil para desarrollo o cuando se quiere control manual del procesamiento
+
 *Última actualización: Junio 2025*

@@ -411,30 +411,57 @@ class PaymentService {
 
       // If product has licenses, start fulfillment process
       if (order.product && order.product.license_type) {
-        const license = await this.reserveLicenseForOrder(order, dbTransaction)
+        try {
+          const license = await this.reserveLicenseForOrder(order, dbTransaction)
 
-        // For digital products, complete immediately and send license
-        await order.update({
-          status: 'COMPLETED'
-        }, { transaction: dbTransaction })
+          // For digital products, complete immediately and send license
+          await order.update({
+            status: 'COMPLETED'
+          }, { transaction: dbTransaction })
 
-        // Send license email after transaction commits
-        setImmediate(async () => {
-          try {
-            await emailService.sendLicenseEmail({
-              customer: order.customer,
-              product: order.product,
-              license,
-              order
-            })
-          } catch (emailError) {
-            logger.logError(emailError, {
-              operation: 'sendLicenseEmail',
+          // Send license email after transaction commits
+          setImmediate(async () => {
+            try {
+              await emailService.sendLicenseEmail({
+                customer: order.customer,
+                product: order.product,
+                license,
+                order
+              })
+            } catch (emailError) {
+              logger.logError(emailError, {
+                operation: 'sendLicenseEmail',
+                orderId: order.id,
+                licenseId: license.id
+              })
+            }
+          })
+        } catch (licenseError) {
+          // If no licenses available, add to waitlist
+          if (licenseError.message.includes('No available licenses')) {
+            logger.logBusiness('payment:success.waitlist', {
               orderId: order.id,
-              licenseId: license.id
+              productRef: order.productRef,
+              reason: 'No available licenses'
             })
+
+            // Add to waitlist after transaction commits
+            setImmediate(async () => {
+              try {
+                const waitlistService = require('./waitlist.service')
+                await waitlistService.addToWaitlist(order, 'OUT_OF_STOCK')
+              } catch (waitlistError) {
+                logger.logError(waitlistError, {
+                  operation: 'addToWaitlist',
+                  orderId: order.id
+                })
+              }
+            })
+          } else {
+            // Re-throw other license errors
+            throw licenseError
           }
-        })
+        }
       }
 
       logger.logBusiness('payment:success.handled', {

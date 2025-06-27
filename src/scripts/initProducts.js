@@ -66,6 +66,36 @@ async function initializeProducts () {
 
     logger.info('✅ Licencias creadas para:', cursoAvanzado.productRef)
 
+    // Producto 3: Software Pro (SIN STOCK - Para probar lista de espera)
+    const softwarePro = await Product.create({
+      name: 'Software Pro - Licencia Anual',
+      productRef: 'SOFT-PRO-1Y',
+      price: 29900, // 299 USD
+      currency: 'USD',
+      description: 'Licencia anual para Software Pro con todas las funcionalidades premium',
+      features: 'Acceso completo a todas las funcionalidades, soporte prioritario, actualizaciones gratuitas',
+      license_type: true,
+      isActive: true
+    }, { transaction: t })
+
+    logger.info('✅ Producto creado:', softwarePro.productRef)
+
+    // Crear 2 licencias VENDIDAS para Software Pro (sin stock disponible)
+    for (let i = 0; i < 2; i++) {
+      const licenseKey = await generateLicenseKey(softwarePro.productRef)
+      await License.create({
+        productRef: softwarePro.productRef,
+        licenseKey,
+        status: 'SOLD',
+        orderId: 999 + i, // Orden ficticia para simular venta
+        soldAt: new Date(),
+        instructions: 'Descarga el software desde nuestra página web y usa este código para activar tu licencia'
+      }, { transaction: t })
+    }
+
+    logger.info('✅ Licencias VENDIDAS creadas para:', softwarePro.productRef)
+    logger.info('📋 NOTA: Este producto está SIN STOCK para probar el sistema de lista de espera')
+
     logger.info('🎉 Inicialización completada exitosamente!')
 
     // Mostrar resumen
@@ -80,12 +110,29 @@ async function initializeProducts () {
       logger.info(`\n📦 Producto: ${product.name}`)
       logger.info(`   Referencia: ${product.productRef}`)
       logger.info(`   Precio: ${product.price} ${product.currency}`)
-      logger.info(`   Licencias disponibles: ${product.licenses.length}`)
+      logger.info(`   Licencias totales: ${product.licenses.length}`)
+      
+      const available = product.licenses.filter(l => l.status === 'AVAILABLE').length
+      const sold = product.licenses.filter(l => l.status === 'SOLD').length
+      
+      logger.info(`   Licencias disponibles: ${available}`)
+      logger.info(`   Licencias vendidas: ${sold}`)
+      
+      if (available === 0 && sold > 0) {
+        logger.info(`   ⚠️  PRODUCTO SIN STOCK - Ideal para probar lista de espera`)
+      }
+      
       product.licenses.forEach(license => {
         logger.info(`   - ${license.licenseKey} (${license.status})`)
       })
     })
-  }, { recordsCount: 8 }) // 2 productos + 6 licencias
+
+    logger.info('\n🧪 PARA PROBAR LISTA DE ESPERA:')
+    logger.info('1. Crear una orden para el producto SOFT-PRO-1Y')
+    logger.info('2. El sistema automáticamente lo agregará a la lista de espera')
+    logger.info('3. Usar POST /api/waitlist/reserve para reservar licencias')
+    logger.info('4. El job automático procesará las licencias cada 30 segundos')
+  }, { recordsCount: 11 }) // 3 productos + 8 licencias
 }
 
 // Ejecutar el script

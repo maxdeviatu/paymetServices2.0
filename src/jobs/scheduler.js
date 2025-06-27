@@ -1,5 +1,6 @@
 const logger = require('../config/logger')
 const OrderTimeoutJob = require('./orderTimeout')
+const WaitlistProcessingJob = require('./waitlistProcessing')
 
 /**
  * Simple job scheduler for background tasks
@@ -41,6 +42,14 @@ class JobScheduler {
 
     // Register default jobs
     this.registerJob(OrderTimeoutJob)
+    
+    // Solo registrar waitlist job si está habilitado
+    if (process.env.ENABLE_WAITLIST_PROCESSING === 'true') {
+      this.registerJob(WaitlistProcessingJob)
+      logger.info('✅ Waitlist processing job habilitado')
+    } else {
+      logger.info('⏸️  Waitlist processing job pausado (ENABLE_WAITLIST_PROCESSING=false)')
+    }
 
     // Start each job based on its schedule
     for (const [name, job] of this.jobs) {
@@ -67,6 +76,9 @@ class JobScheduler {
       switch (jobName) {
         case 'orderTimeout':
           intervalMs = 10 * 60 * 1000 // 10 minutes
+          break
+        case 'waitlistProcessing':
+          intervalMs = 30 * 1000 // 30 seconds
           break
         default:
           intervalMs = 10 * 60 * 1000 // 10 minutes default

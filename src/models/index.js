@@ -8,6 +8,7 @@ const Order = require('./order.model')
 const Transaction = require('./transaction.model')
 const CobreCheckout = require('./cobreCheckout')
 const WebhookEvent = require('./webhookEvent.model')
+const WaitlistEntry = require('./waitlistEntry.model')
 const { initDB, sequelize } = require('./db')
 
 // Establecer relaciones entre modelos
@@ -63,6 +64,39 @@ License.belongsTo(Order, {
   allowNull: true
 })
 
+// WaitlistEntry associations
+WaitlistEntry.belongsTo(Order, {
+  foreignKey: 'orderId',
+  as: 'order'
+})
+WaitlistEntry.belongsTo(User, {
+  foreignKey: 'customerId',
+  as: 'customer'
+})
+WaitlistEntry.belongsTo(Product, {
+  foreignKey: 'productRef',
+  targetKey: 'productRef',
+  as: 'product'
+})
+WaitlistEntry.belongsTo(License, {
+  foreignKey: 'licenseId',
+  as: 'license',
+  allowNull: true
+})
+
+// License-WaitlistEntry relationship (removed to avoid circular dependency)
+// License.belongsTo(WaitlistEntry, {
+//   foreignKey: 'waitlistEntryId',
+//   as: 'waitlistEntry',
+//   allowNull: true
+// })
+
+// Order-WaitlistEntry relationship
+Order.hasOne(WaitlistEntry, {
+  foreignKey: 'orderId',
+  as: 'waitlistEntry'
+})
+
 // CobreCheckout associations
 CobreCheckout.belongsTo(Transaction, {
   foreignKey: 'transactionId',
@@ -84,6 +118,7 @@ module.exports = {
   Transaction,
   CobreCheckout,
   WebhookEvent,
+  WaitlistEntry,
   DOCUMENT_TYPES,
   initDB,
   sequelize

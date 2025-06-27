@@ -60,6 +60,54 @@ class EmailService {
   }
 
   /**
+   * Send waitlist notification email
+   */
+  async sendWaitlistNotification ({ customer, product, order, waitlistEntry }) {
+    try {
+      const emailData = {
+        to: customer.email,
+        from: this.from,
+        subject: `Tu compra está en lista de espera - ${product.name}`,
+        template: 'waitlist-notification',
+        data: {
+          customerName: `${customer.firstName} ${customer.lastName}`,
+          productName: product.name,
+          orderId: order.id,
+          purchaseDate: order.createdAt.toLocaleDateString('es-CO'),
+          estimatedTime: '24-48 horas',
+          supportEmail: 'soporte@innovatelearning.com.co'
+        }
+      }
+
+      logger.logBusiness('email:waitlistNotification', {
+        orderId: order.id,
+        customerId: customer.id,
+        waitlistEntryId: waitlistEntry.id,
+        productRef: product.productRef,
+        customerEmail: customer.email
+      })
+
+      if (process.env.NODE_ENV === 'development') {
+        // In development, just log the email
+        await this.logEmail(emailData)
+      } else {
+        // In production, send actual email
+        await this.sendEmail(emailData)
+      }
+
+      return { success: true, messageId: `waitlist-${order.id}-${Date.now()}` }
+    } catch (error) {
+      logger.logError(error, {
+        operation: 'sendWaitlistNotification',
+        orderId: order.id,
+        customerId: customer.id,
+        waitlistEntryId: waitlistEntry.id
+      })
+      throw error
+    }
+  }
+
+  /**
    * Send order confirmation email
    */
   async sendOrderConfirmation ({ customer, product, order, transaction }) {
@@ -153,6 +201,8 @@ class EmailService {
     switch (templateName) {
       case 'license-delivery':
         return this.renderLicenseTemplate(data)
+      case 'waitlist-notification':
+        return this.renderWaitlistNotificationTemplate(data)
       case 'order-confirmation':
         return this.renderOrderConfirmationTemplate(data)
       default:
@@ -184,6 +234,36 @@ Si tienes alguna pregunta o problema con tu licencia, no dudes en contactarnos:
 📧 Email: ${data.supportEmail}
 
 ¡Gracias por tu compra!
+
+El equipo de Innovate Learning
+    `.trim()
+  }
+
+  /**
+   * Render waitlist notification template
+   */
+  renderWaitlistNotificationTemplate (data) {
+    return `
+¡Hola ${data.customerName}!
+
+Tu pago ha sido procesado exitosamente, pero actualmente no tenemos licencias disponibles para ${data.productName}.
+
+📋 ESTADO DE TU ORDEN:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• Orden: #${data.orderId}
+• Producto: ${data.productName}
+• Estado: En lista de espera
+• Tiempo estimado: ${data.estimatedTime}
+• Fecha de compra: ${data.purchaseDate}
+
+⏰ ¿QUÉ PASA AHORA?
+Te hemos agregado a nuestra lista de espera y procesaremos tu licencia tan pronto como tengamos stock disponible. Te notificaremos automáticamente cuando tu licencia esté lista.
+
+💬 ¿NECESITAS AYUDA?
+Si tienes alguna pregunta sobre tu orden, no dudes en contactarnos:
+📧 Email: ${data.supportEmail}
+
+¡Gracias por tu paciencia!
 
 El equipo de Innovate Learning
     `.trim()
