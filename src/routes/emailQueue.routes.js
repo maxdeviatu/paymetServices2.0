@@ -43,6 +43,17 @@ router.post('/process',
 )
 
 /**
+ * @route POST /api/email-queue/test
+ * @desc Test del sistema de cola de correos
+ * @access Super Administrador
+ */
+router.post('/test', 
+  authenticate, 
+  requireRole('SUPER_ADMIN'), 
+  emailQueueController.testQueue
+)
+
+/**
  * @route GET /api/email-queue/metrics
  * @desc Obtener métricas completas de waitlist y cola de correos
  * @access Administrador

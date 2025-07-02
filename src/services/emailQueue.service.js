@@ -22,10 +22,39 @@ class EmailQueueService {
   }
 
   /**
+   * Inicializar el servicio de cola de emails
+   * Método explícito para inicialización desde app.js
+   */
+  initialize() {
+    logger.info('EmailQueueService: Starting initialization', {
+      queueSize: this.queue.length,
+      isProcessing: this.isProcessing,
+      intervalSeconds: this.intervalSeconds
+    })
+
+    // Si hay elementos en la cola al inicializar, comenzar procesamiento
+    if (this.queue.length > 0 && !this.isProcessing) {
+      this.startProcessing()
+    }
+
+    logger.info('EmailQueueService: Initialization completed', {
+      ready: true,
+      intervalSeconds: this.intervalSeconds
+    })
+  }
+
+  /**
    * Agregar correo de licencia a la cola
    */
   async queueLicenseEmail(waitlistEntry) {
     try {
+      logger.info('EmailQueueService: queueLicenseEmail called', {
+        waitlistEntryId: waitlistEntry.id,
+        orderId: waitlistEntry.orderId,
+        queueSize: this.queue.length,
+        isProcessing: this.isProcessing
+      })
+
       if (this.queue.length >= this.maxQueueSize) {
         throw new Error('Email queue is full')
       }
@@ -45,19 +74,25 @@ class EmailQueueService {
       logger.logBusiness('emailQueue:license.queued', {
         emailId: emailItem.id,
         waitlistEntryId: waitlistEntry.id,
-        queueSize: this.queue.length
+        queueSize: this.queue.length,
+        wasProcessing: this.isProcessing
       })
 
       // Iniciar procesamiento si no está corriendo
       if (!this.isProcessing) {
+        logger.info('EmailQueueService: Starting processing because queue was not active')
         this.startProcessing()
+      } else {
+        logger.info('EmailQueueService: Processing already active, item added to queue')
       }
 
       return emailItem.id
     } catch (error) {
       logger.logError(error, {
         operation: 'queueLicenseEmail',
-        waitlistEntryId: waitlistEntry.id
+        waitlistEntryId: waitlistEntry.id,
+        errorMessage: error.message,
+        errorStack: error.stack
       })
       throw error
     }
@@ -110,18 +145,25 @@ class EmailQueueService {
    */
   startProcessing() {
     if (this.isProcessing) {
+      logger.info('EmailQueueService: startProcessing called but already processing')
       return
     }
 
     this.isProcessing = true
     logger.logBusiness('emailQueue:processing.start', {
       queueSize: this.queue.length,
-      intervalSeconds: this.intervalSeconds
+      intervalSeconds: this.intervalSeconds,
+      timestamp: new Date().toISOString()
     })
 
     this.processingInterval = setInterval(async () => {
       await this.processNextEmail()
     }, this.intervalSeconds * 1000)
+
+    logger.info('EmailQueueService: Processing interval started', {
+      intervalMs: this.intervalSeconds * 1000,
+      queueSize: this.queue.length
+    })
   }
 
   /**
@@ -155,7 +197,8 @@ class EmailQueueService {
         emailId: emailItem.id,
         type: emailItem.type,
         waitlistEntryId: emailItem.waitlistEntryId,
-        retryCount: emailItem.retryCount
+        retryCount: emailItem.retryCount,
+        queueSizeRemaining: this.queue.length
       })
 
       await this.sendEmail(emailItem)
@@ -163,7 +206,8 @@ class EmailQueueService {
       logger.logBusiness('emailQueue:processing.success', {
         emailId: emailItem.id,
         type: emailItem.type,
-        waitlistEntryId: emailItem.waitlistEntryId
+        waitlistEntryId: emailItem.waitlistEntryId,
+        message: 'Email sent successfully from queue'
       })
 
     } catch (error) {
@@ -213,6 +257,10 @@ class EmailQueueService {
         await this.sendWaitlistNotification(emailItem)
         break
 
+      case 'TEST_EMAIL':
+        await this.sendTestEmail(emailItem)
+        break
+
       default:
         throw new Error(`Unknown email type: ${emailItem.type}`)
     }
@@ -223,6 +271,11 @@ class EmailQueueService {
    */
   async sendLicenseEmail(emailItem) {
     const { WaitlistEntry, Order, License } = require('../models')
+
+    logger.logBusiness('emailQueue:license.preparing', {
+      emailId: emailItem.id,
+      waitlistEntryId: emailItem.waitlistEntryId
+    })
 
     const waitlistEntry = await WaitlistEntry.findByPk(emailItem.waitlistEntryId)
     if (!waitlistEntry) {
@@ -239,6 +292,14 @@ class EmailQueueService {
       throw new Error('Order or license not found')
     }
 
+    logger.logBusiness('emailQueue:license.sending', {
+      emailId: emailItem.id,
+      waitlistEntryId: waitlistEntry.id,
+      orderId: order.id,
+      licenseId: license.id,
+      customerEmail: order.customer.email
+    })
+
     await emailService.sendLicenseEmail({
       customer: order.customer,
       product: order.product,
@@ -246,19 +307,13 @@ class EmailQueueService {
       order
     })
 
-    // Actualizar el estado de la orden a COMPLETED después del envío exitoso
-    await Order.update({
-      status: 'COMPLETED'
-    }, {
-      where: { id: order.id }
-    })
-
     logger.logBusiness('emailQueue:license.sent', {
       emailId: emailItem.id,
       waitlistEntryId: waitlistEntry.id,
       orderId: order.id,
       licenseId: license.id,
-      customerEmail: order.customer.email
+      customerEmail: order.customer.email,
+      message: 'License email sent successfully'
     })
   }
 
@@ -297,6 +352,25 @@ class EmailQueueService {
   }
 
   /**
+   * Enviar email de test
+   */
+  async sendTestEmail(emailItem) {
+    logger.logBusiness('emailQueue:test.sending', {
+      emailId: emailItem.id,
+      timestamp: new Date().toISOString()
+    })
+
+    // Simular envío de email
+    await new Promise(resolve => setTimeout(resolve, 100))
+
+    logger.logBusiness('emailQueue:test.sent', {
+      emailId: emailItem.id,
+      message: 'Test email processed successfully',
+      timestamp: new Date().toISOString()
+    })
+  }
+
+  /**
    * Obtener estadísticas de la cola
    */
   getQueueStats() {
@@ -322,6 +396,69 @@ class EmailQueueService {
       ...stats,
       typeStats,
       statusStats
+    }
+  }
+
+  /**
+   * Forzar procesamiento manual de cola de correos
+   */
+  async processEmailQueue() {
+    try {
+      await this.processNextEmail()
+      return { success: true, message: 'Email queue processed manually' }
+    } catch (error) {
+      logger.logError(error, {
+        operation: 'processEmailQueue'
+      })
+      throw error
+    }
+  }
+
+  /**
+   * Método de test para verificar el funcionamiento del email queue
+   */
+  async testEmailQueue() {
+    try {
+      logger.info('EmailQueueService: Running test', {
+        queueSize: this.queue.length,
+        isProcessing: this.isProcessing,
+        intervalSeconds: this.intervalSeconds
+      })
+
+      // Crear un email de prueba
+      const testEmailItem = {
+        id: `test_${Date.now()}`,
+        type: 'TEST_EMAIL',
+        waitlistEntryId: null,
+        orderId: null,
+        retryCount: 0,
+        createdAt: new Date(),
+        status: 'PENDING'
+      }
+
+      this.queue.push(testEmailItem)
+
+      logger.info('EmailQueueService: Test email added to queue', {
+        emailId: testEmailItem.id,
+        queueSize: this.queue.length
+      })
+
+      // Iniciar procesamiento si no está corriendo
+      if (!this.isProcessing) {
+        this.startProcessing()
+      }
+
+      return {
+        success: true,
+        testEmailId: testEmailItem.id,
+        queueSize: this.queue.length,
+        isProcessing: this.isProcessing
+      }
+    } catch (error) {
+      logger.logError(error, {
+        operation: 'testEmailQueue'
+      })
+      throw error
     }
   }
 

@@ -519,7 +519,7 @@ class TransactionHandler {
       // Enviar email de confirmación
       setImmediate(async () => {
         try {
-          await this.sendOrderConfirmation(order, transaction)
+          // await this.sendOrderConfirmation(order, transaction)
         } catch (emailError) {
           logger.error('TransactionHandler: Error sending order confirmation', {
             error: emailError.message,
@@ -566,51 +566,55 @@ class TransactionHandler {
 
       // Si es producto digital con licencia, manejar licencia y completar orden
       if (order.product && order.product.license_type) {
-        // Reservar licencia de forma transaccional
+        // Reservar licencia de forma transaccional o agregar a lista de espera
         const licensePromise = this.reserveLicenseForOrder(order, dbTransaction)
         updates.push(licensePromise)
 
         // Ejecutar actualizaciones en paralelo
-        await Promise.all(updates)
+        const results = await Promise.all(updates)
+        const licenseResult = results.find(result => result && (result.license || result.waitlisted))
 
-        // Completar la orden después de asegurar la licencia
-        await order.update({
-          status: 'COMPLETED'
-        }, { 
-          transaction: dbTransaction,
-          fields: ['status', 'updated_at']
-        })
+        if (licenseResult?.license) {
+          // Licencia asignada exitosamente, completar la orden
+          await order.update({
+            status: 'COMPLETED'
+          }, { 
+            transaction: dbTransaction,
+            fields: ['status', 'updated_at']
+          })
 
-        // Programar envío de emails de forma asíncrona (fuera de la transacción)
-        setImmediate(() => {
-          Promise.all([
-            this.sendLicenseEmail(order, transaction).catch(error => 
+          // Programar envío de email de licencia de forma asíncrona
+          setImmediate(() => {
+            this.sendLicenseEmail(order, transaction).catch(error => {
               logger.error('TransactionHandler: Error sending license email', {
                 error: error.message,
                 orderId: order.id
               })
-            ),
-            this.sendOrderConfirmation(order, transaction).catch(error => 
-              logger.error('TransactionHandler: Error sending order confirmation', {
+            })
+          })
+        } else if (licenseResult?.waitlisted) {
+          // Agregado a lista de espera, mantener orden en IN_PROCESS
+          logger.info('TransactionHandler: Order added to waitlist', {
+            orderId: order.id,
+            waitlistEntryId: licenseResult.waitlistEntry?.id
+          })
+
+          // Programar envío de email de lista de espera de forma asíncrona
+          setImmediate(() => {
+            this.sendWaitlistNotification(order, transaction, licenseResult.waitlistEntry).catch(error => {
+              logger.error('TransactionHandler: Error sending waitlist notification', {
                 error: error.message,
                 orderId: order.id
               })
-            )
-          ])
-        })
+            })
+          })
+        }
       } else {
         // Solo ejecutar la actualización de estado
         await Promise.all(updates)
 
         // Programar envío de email de confirmación
-        setImmediate(() => {
-          this.sendOrderConfirmation(order, transaction).catch(error => 
-            logger.error('TransactionHandler: Error sending order confirmation', {
-              error: error.message,
-              orderId: order.id
-            })
-          )
-        })
+        // No enviar email de confirmación por ahora
       }
 
       logger.info('TransactionHandler: Payment success handled (optimized)', {
@@ -713,13 +717,13 @@ class TransactionHandler {
   }
 
   /**
-   * Reserva una licencia para la orden
+   * Reserva una licencia para la orden o la agrega a lista de espera
    * @param {Order} order - Orden
    * @param {Object} dbTransaction - Transacción de base de datos
-   * @returns {Promise<License>} - Licencia reservada
+   * @returns {Promise<{license?: License, waitlisted?: boolean}>} - Resultado de la reserva
    */
   async reserveLicenseForOrder (order, dbTransaction) {
-    const { License } = require('../../../models')
+    const { License, WaitlistEntry } = require('../../../models')
 
     // Nota: dbTransaction ya viene del TransactionManager con configuración optimizada
     // Buscar licencia disponible con lock pesimista para prevenir race conditions
@@ -733,7 +737,31 @@ class TransactionHandler {
     })
 
     if (!license) {
-      throw new Error(`No available licenses for product ${order.productRef}`)
+      // No hay licencias disponibles, agregar a lista de espera
+      logger.info('TransactionHandler: No licenses available, adding to waitlist', {
+        orderId: order.id,
+        productRef: order.productRef
+      })
+
+      // Crear entrada en lista de espera
+      const waitlistEntry = await WaitlistEntry.create({
+        orderId: order.id,
+        customerId: order.customerId,
+        productRef: order.productRef,
+        qty: order.qty,
+        status: 'PENDING',
+        priority: new Date(), // FIFO
+        retryCount: 0
+      }, { transaction: dbTransaction })
+
+      logger.info('TransactionHandler: Added to waitlist', {
+        waitlistEntryId: waitlistEntry.id,
+        orderId: order.id,
+        customerId: order.customerId,
+        productRef: order.productRef
+      })
+
+      return { waitlisted: true, waitlistEntry }
     }
 
     // Reservar licencia
@@ -749,7 +777,7 @@ class TransactionHandler {
       productRef: order.productRef
     })
 
-    return license
+    return { license }
   }
 
   /**
@@ -787,6 +815,25 @@ class TransactionHandler {
         product: order.product,
         license,
         order
+      })
+    }
+  }
+
+  /**
+   * Envía email de notificación de lista de espera
+   * @param {Order} order - Orden
+   * @param {Transaction} transaction - Transacción
+   * @param {WaitlistEntry} waitlistEntry - Entrada de lista de espera
+   */
+  async sendWaitlistNotification (order, transaction, waitlistEntry) {
+    const emailService = require('../../email')
+
+    if (waitlistEntry) {
+      await emailService.sendWaitlistNotification({
+        customer: order.customer,
+        product: order.product,
+        order,
+        waitlistEntry
       })
     }
   }

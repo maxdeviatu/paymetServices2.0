@@ -1,24 +1,28 @@
-# Sistema de Cola de Correos para Lista de Espera
+# Sistema de Cola de Correos para Lista de Espera v2.0
 
 ## Descripción
 
-El sistema de cola de correos mejora la gestión de envío de licencias y notificaciones de la lista de espera, evitando saturar el servidor de correos con envíos masivos y garantizando una entrega ordenada y controlada.
+El sistema de cola de correos v2.0 implementa un **control de flujo inteligente** que procesa automáticamente la lista de espera con envío secuencial de emails cada 30 segundos. **Las licencias se apartan como RESERVED y las órdenes se completan SOLO después de confirmar el envío exitoso del email**, garantizando integridad transaccional y control de flujo.
 
-## Características Principales
+## Características Principales v2.0
 
-### 1. Envío Controlado
-- Intervalo configurable entre envíos (por defecto 30 segundos)
-- Máximo de reintentos configurable (por defecto 3)
-- Tamaño máximo de cola configurable (por defecto 1000)
+### 1. 🔄 Procesamiento Automático Inteligente
+- **Job cada 30 segundos**: Analiza automáticamente la lista de espera
+- **Auto-reserva de licencias**: Aparta licencias como `RESERVED` (no `SOLD`)
+- **Envío secuencial**: 1 email cada 30 segundos en orden FIFO
+- **Completación confirmada**: Orden `COMPLETED` solo después de email exitoso
 
-### 2. Procesamiento Asíncrono
-- Los correos se procesan en segundo plano sin bloquear el sistema principal
-- Gestión automática de la cola con inicio/parada inteligente
-- Logs detallados para trazabilidad
+### 2. 🔒 Control Transaccional Avanzado
+- **SELECT FOR UPDATE**: Prevención de race conditions en inventario
+- **Transacciones SERIALIZABLE**: Máxima consistencia de datos
+- **Apartado seguro**: Licencias protegidas hasta confirmar entrega
+- **Estados precisos**: Refleja la realidad del procesamiento
 
-### 3. Estados de Orden Actualizados
-- Las órdenes solo se marcan como `COMPLETED` después del envío exitoso del correo
-- Separación clara entre asignación de licencia y notificación al cliente
+### 3. 📧 Gestión Inteligente de Email
+- **Control de flujo**: Evita saturación del servidor de correos
+- **Reintentos automáticos**: Hasta 3 intentos por email fallido
+- **Logs completos**: Trazabilidad detallada de cada operación
+- **Proveedor Brevo**: Integración robusta con plantillas HTML
 
 ## Variables de Entorno
 
@@ -29,26 +33,46 @@ WAITLIST_EMAIL_MAX_RETRIES=3                # Máximo de reintentos por correo
 WAITLIST_EMAIL_QUEUE_MAX_SIZE=1000          # Tamaño máximo de la cola
 ```
 
-## Flujo de Proceso Mejorado
+## Flujo de Proceso v2.0 (Implementado)
 
-### 1. Fase de Reserva Masiva
-```
-Cliente intenta comprar → Sin stock → Agregar a lista de espera
-↓
-Job de procesamiento → Reservar licencias disponibles (masivamente)
-↓
-Cambiar estado de licencias a RESERVED y entradas a RESERVED
+### 🔄 Nuevo Flujo Automático Inteligente
+
+```mermaid
+graph TD
+    A[Cliente Paga Sin Stock] --> B[WaitlistEntry PENDING]
+    B --> C[Job cada 30s]
+    C --> D{¿Hay licencias?}
+    D -->|No| C
+    D -->|Sí| E[Auto-reserva]
+    E --> F[License: RESERVED<br/>Entry: READY_FOR_EMAIL<br/>Order: IN_PROCESS]
+    F --> G[Job siguiente ciclo]
+    G --> H[Busca 1 READY_FOR_EMAIL]
+    H --> I[Envía email]
+    I --> J{¿Email exitoso?}
+    J -->|Sí| K[License: SOLD<br/>Order: COMPLETED<br/>Entry: COMPLETED]
+    J -->|No| L[Reintentar hasta 3 veces]
+    L --> I
 ```
 
-### 2. Fase de Asignación Controlada
+### 1. Fase de Auto-Reserva (Cada 30s)
 ```
-Job de procesamiento → Procesar entradas RESERVED
-↓
-Asignar licencia → Cambiar estado a SOLD
-↓
-Marcar entrada como COMPLETED → Agregar correo a cola
-↓
-Cola procesa correo (cada 30s) → Marcar orden como COMPLETED
+1. Job analiza lista de espera → Busca entradas PENDING
+2. Cuenta licencias disponibles → Verifica stock AVAILABLE  
+3. Aparta licencias como RESERVED → No las vende todavía
+4. Marca entradas como READY_FOR_EMAIL → Listas para envío
+5. Órdenes permanecen IN_PROCESS → Hasta confirmar email
+```
+
+### 2. Fase de Envío Controlado (Cada 30s)
+```
+1. Job busca 1 entrada READY_FOR_EMAIL → Orden FIFO
+2. Marca como PROCESSING → Durante envío
+3. Envía email via Brevo → Con licencia y detalles
+4. ✅ Si email exitoso → Confirma transacción:
+   - License: RESERVED → SOLD
+   - Order: IN_PROCESS → COMPLETED  
+   - Entry: PROCESSING → COMPLETED
+5. ❌ Si email falla → Reintenta hasta 3 veces
 ```
 
 ## APIs Administrativas

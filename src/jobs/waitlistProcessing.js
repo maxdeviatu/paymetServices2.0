@@ -28,18 +28,28 @@ class WaitlistProcessingJob {
         timestamp: new Date().toISOString()
       })
 
-      const results = await waitlistService.processReservedLicenses()
+      // Paso 1: Reservar automáticamente licencias disponibles para entradas PENDING
+      const reserveResults = await this.autoReserveLicenses()
+      
+      // Paso 2: Procesar entradas RESERVED (enviar emails con control de tiempo)
+      const processResults = await waitlistService.processReservedLicenses()
+      
       const duration = Date.now() - startTime
+      const combinedResults = {
+        ...processResults,
+        autoReserved: reserveResults.totalReserved,
+        autoReserveDetails: reserveResults.details
+      }
 
       logger.logBusiness('job:waitlistProcessing.completed', {
         duration: `${duration}ms`,
-        ...results
+        ...combinedResults
       })
 
       return {
         success: true,
         duration,
-        ...results
+        ...combinedResults
       }
     } catch (error) {
       const duration = Date.now() - startTime
@@ -56,6 +66,65 @@ class WaitlistProcessingJob {
       }
     } finally {
       this.isRunning = false
+    }
+  }
+
+  /**
+   * Reservar automáticamente licencias disponibles para entradas PENDING
+   */
+  async autoReserveLicenses() {
+    try {
+      // Obtener todos los productos que tienen entradas PENDING en la lista de espera
+      const { WaitlistEntry } = require('../models')
+      
+      const pendingProducts = await WaitlistEntry.findAll({
+        where: {
+          status: 'PENDING'
+        },
+        attributes: ['productRef'],
+        group: ['productRef'],
+        raw: true
+      })
+
+      const results = {
+        totalReserved: 0,
+        details: []
+      }
+
+      // Para cada producto, intentar reservar licencias
+      for (const productData of pendingProducts) {
+        const productRef = productData.productRef
+        
+        try {
+          const reserveResult = await waitlistService.reserveAvailableLicenses(productRef)
+          
+          if (reserveResult.reserved > 0) {
+            logger.info(`AutoReserve: Reserved ${reserveResult.reserved} licenses for ${productRef}`)
+            results.totalReserved += reserveResult.reserved
+            results.details.push({
+              productRef,
+              reserved: reserveResult.reserved,
+              waitlistCount: reserveResult.waitlistCount
+            })
+          }
+        } catch (error) {
+          logger.error(`AutoReserve: Error reserving licenses for ${productRef}:`, error.message)
+          results.details.push({
+            productRef,
+            reserved: 0,
+            error: error.message
+          })
+        }
+      }
+
+      return results
+    } catch (error) {
+      logger.error('AutoReserve: Failed to auto-reserve licenses:', error.message)
+      return {
+        totalReserved: 0,
+        details: [],
+        error: error.message
+      }
     }
   }
 

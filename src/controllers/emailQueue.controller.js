@@ -92,6 +92,38 @@ class EmailQueueController {
   }
 
   /**
+   * Test del email queue service
+   */
+  async testQueue(req, res) {
+    try {
+      const emailQueueService = require('../services/emailQueue.service')
+      const result = await emailQueueService.testEmailQueue()
+      
+      logger.logBusiness('emailQueue:test.manual', {
+        adminId: req.user?.id,
+        testEmailId: result.testEmailId
+      })
+
+      res.json({
+        success: true,
+        message: 'Email queue test initiated',
+        data: result
+      })
+    } catch (error) {
+      logger.logError(error, {
+        operation: 'testQueue',
+        userId: req.user?.id
+      })
+
+      res.status(500).json({
+        success: false,
+        message: 'Error testing queue',
+        error: error.message
+      })
+    }
+  }
+
+  /**
    * Obtener métricas completas de waitlist incluyendo cola
    */
   async getFullMetrics(req, res) {

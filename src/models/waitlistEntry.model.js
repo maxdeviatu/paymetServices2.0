@@ -41,7 +41,7 @@ const WaitlistEntry = sequelize.define('WaitlistEntry', {
     }
   },
   status: {
-    type: DataTypes.ENUM('PENDING', 'RESERVED', 'PROCESSING', 'COMPLETED', 'FAILED'),
+    type: DataTypes.ENUM('PENDING', 'RESERVED', 'PROCESSING', 'READY_FOR_EMAIL', 'COMPLETED', 'FAILED'),
     defaultValue: 'PENDING',
     comment: 'Estado del procesamiento de la lista de espera'
   },

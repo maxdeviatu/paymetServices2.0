@@ -34,34 +34,37 @@ El **Servicio de Lista de Espera** es un sistema inteligente que maneja automát
 5. Orden queda en IN_PROCESS → Esperando licencias
 ```
 
-### **Escenario 2: Administrador Libera Licencias**
+### **Escenario 2: Sistema Procesa Automáticamente (Mejorado)**
 ```
-1. Admin ejecuta reserva → POST /api/waitlist/reserve
-2. Sistema reserva licencias → Estado: RESERVED
-3. Job automático procesa → Cada 30 segundos
-4. Sistema envía licencia → Email con clave de licencia
-5. Orden se completa → Estado: COMPLETED
+1. Job automático analiza → Cada 30 segundos
+2. Detecta licencias disponibles → Licencias AVAILABLE
+3. Aparta licencias como RESERVED → Estado: RESERVED (no SOLD)
+4. Marca entradas como READY_FOR_EMAIL → Listas para envío
+5. Órdenes permanecen IN_PROCESS → Hasta confirmar email
+6. Envía 1 email cada 30 segundos → Control de flujo
+7. Solo después de email exitoso → Licencia SOLD + Orden COMPLETED
 ```
 
 ## 📊 Estados del Sistema
 
-### **Estados de Lista de Espera**
-| Estado | Descripción | Acción Requerida |
-|--------|-------------|------------------|
-| `PENDING` | En lista de espera | Esperar licencias disponibles |
-| `RESERVED` | Licencia reservada | Procesamiento automático |
-| `PROCESSING` | Enviando licencia | Esperar completación |
-| `COMPLETED` | Licencia entregada | ✅ Finalizado |
-| `FAILED` | Error en procesamiento | Revisar y reintentar |
+### **Estados de Lista de Espera (Actualizados)**
+| Estado | Descripción | Acción Requerida | Siguiente Estado |
+|--------|-------------|------------------|------------------|
+| `PENDING` | En lista de espera | Esperar licencias disponibles | `READY_FOR_EMAIL` |
+| `RESERVED` | ⚠️ DEPRECATED | Ya no se usa | - |
+| `READY_FOR_EMAIL` | 🆕 Licencia apartada, lista para email | Procesamiento automático | `PROCESSING` |
+| `PROCESSING` | Enviando licencia | Esperar completación | `COMPLETED` |
+| `COMPLETED` | Licencia entregada y orden completada | ✅ Finalizado | - |
+| `FAILED` | Error en procesamiento | Revisar y reintentar | - |
 
 ### **Estados de Licencias**
-| Estado | Descripción | Uso |
-|--------|-------------|-----|
-| `AVAILABLE` | Disponible para venta | Stock normal |
-| `RESERVED` | Reservada para lista de espera | En proceso |
-| `SOLD` | Vendida y asignada | Cliente activo |
-| `ANNULLED` | Anulada por admin | No disponible |
-| `RETURNED` | Devuelta al stock | Disponible nuevamente |
+| Estado | Descripción | Uso | Cuando Ocurre |
+|--------|-------------|-----|---------------|
+| `AVAILABLE` | Disponible para venta | Stock normal | Licencia en inventario |
+| `RESERVED` | Apartada para lista de espera | 🆕 Apartada pero no vendida | Después de auto-reserva |
+| `SOLD` | Vendida y asignada | Cliente activo | ✅ Solo después de email exitoso |
+| `ANNULLED` | Anulada por admin | No disponible | Acción administrativa |
+| `RETURNED` | Devuelta al stock | Disponible nuevamente | Devolución de cliente |
 
 ## 🛠️ Endpoints de Administración
 
@@ -70,18 +73,26 @@ El **Servicio de Lista de Espera** es un sistema inteligente que maneja automát
 GET /api/waitlist/metrics?productRef=SOFT-PRO-1Y
 ```
 
-**Respuesta:**
+**Respuesta (Actualizada):**
 ```json
 {
   "success": true,
   "data": {
-    "total": 15,
-    "pending": 8,
-    "reserved": 3,
-    "processing": 2,
-    "completed": 2,
-    "failed": 0,
-    "productRef": "SOFT-PRO-1Y"
+    "waitlist": {
+      "total": 15,
+      "pending": 5,
+      "reserved": 0,
+      "processing": 1,
+      "readyForEmail": 3,
+      "completed": 6,
+      "failed": 0,
+      "productRef": "SOFT-PRO-1Y"
+    },
+    "emailQueue": {
+      "queueSize": 2,
+      "isProcessing": true,
+      "intervalSeconds": 30
+    }
   }
 }
 ```
@@ -436,6 +447,62 @@ Para problemas técnicos o consultas sobre el sistema de lista de espera:
 
 ---
 
-**Versión:** 1.0  
-**Última actualización:** Enero 2025  
-**Mantenedores:** Equipo Innovate Learning 
+## 🚀 Flujo Mejorado v2.0 (Implementado)
+
+### **Características del Nuevo Sistema**
+
+#### **🔄 Procesamiento Automático Inteligente**
+1. **Análisis cada 30 segundos**: Job automático revisa lista de espera
+2. **Apartado de licencias**: Se marcan como `RESERVED` (no `SOLD`)  
+3. **Órdenes en proceso**: Permanecen `IN_PROCESS` hasta confirmar email
+4. **Envío controlado**: 1 email cada 30 segundos en orden FIFO
+5. **Completación confirmada**: Solo después de email exitoso
+
+#### **📊 Estados Mejorados**
+```mermaid
+graph TD
+    A[PENDING] --> B[READY_FOR_EMAIL]
+    B --> C[PROCESSING]
+    C --> D[COMPLETED]
+    C --> E[FAILED]
+    E --> C
+```
+
+#### **🔒 Garantías Transaccionales**
+- **SELECT FOR UPDATE**: Prevención de race conditions
+- **Transacciones SERIALIZABLE**: Máxima consistencia
+- **Rollback automático**: En caso de errores
+- **Locks de inventario**: Protección contra concurrencia
+
+#### **📧 Control de Email Optimizado**
+- **Intervalo fijo**: 30 segundos entre emails
+- **Orden FIFO**: Primer llegado, primer enviado
+- **Reintentos automáticos**: Hasta 3 intentos por email
+- **Confirmación requerida**: Orden solo se completa después de email
+
+### **Ventajas del Sistema v2.0**
+
+#### **✅ Para el Negocio**
+- **Apartado != Venta**: Licencias protegidas hasta confirmar entrega
+- **Control de flujo**: No saturar servidor de correos
+- **Trazabilidad completa**: Logs detallados de cada paso
+- **Recuperación automática**: Sistema resiliente a fallos
+
+#### **✅ Para el Cliente**  
+- **Entrega garantizada**: Email confirmado = orden completada
+- **Orden justo**: FIFO respeta orden de llegada
+- **Estado preciso**: Refleja realidad del procesamiento
+- **Comunicación clara**: Notificaciones en cada etapa
+
+#### **✅ Para Operaciones**
+- **Monitoreo avanzado**: Métricas de waitlist + email queue
+- **Control manual**: APIs para intervención cuando necesario
+- **Debugging mejorado**: Logs detallados por operación
+- **Configuración flexible**: Variables de entorno ajustables
+
+---
+
+**Versión:** 2.0  
+**Última actualización:** Julio 2025  
+**Mantenedores:** Equipo Innovate Learning  
+**Estado:** ✅ Implementado y funcionando 

@@ -212,6 +212,11 @@ async function initializeServer () {
       if (process.env.NODE_ENV !== 'test') {
         jobScheduler.start()
         logger.info('Job scheduler iniciado')
+        
+        // Iniciar servicio de cola de correos
+        const emailQueueService = require('./services/emailQueue.service')
+        emailQueueService.initialize()
+        logger.info('Email queue service initialized')
       }
 
       // Inicializar proveedores de pago después de que todo esté listo

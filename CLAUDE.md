@@ -199,24 +199,50 @@ Stock Added → License Reserved → Processing Job → License SOLD → Email Q
 ## Email System
 
 ### Email Queue Architecture
-- Asynchronous email processing to prevent transaction blocking
-- Rate limiting (30 seconds between emails) to avoid server overload
-- Retry logic for failed deliveries (max 3 attempts)
-- Multiple email types: LICENSE_EMAIL, WAITLIST_NOTIFICATION, ORDER_CONFIRMATION
+- **Asynchronous Processing**: Prevents transaction blocking by queuing emails for background processing
+- **Rate Limiting**: 30-second intervals between emails to avoid provider limits
+- **Retry Logic**: Up to 3 attempts for failed deliveries with exponential backoff
+- **Multiple Types**: LICENSE_EMAIL, WAITLIST_NOTIFICATION, TEST_EMAIL
+- **Queue Management**: FIFO processing with status tracking (PENDING, RETRYING)
 
-### Configuration
-- Uses pseudoMailer for development/testing
-- Configurable intervals and retry limits
-- Queue size limit (1000 emails max)
+### Email Providers
+- **Brevo (Production)**: Transactional email service with API integration
+- **PseudoMailer (Development)**: Mock service for testing without external calls
+- **Template Engine**: Handlebars-based HTML templates with variable substitution
+
+### Configuration Variables
+- `SEND_EMAILS=true/false` - Global email sending toggle
+- `BREVO_API_KEY` - Brevo service authentication
+- `BREVO_SENDER_EMAIL` - Default sender address
+- `WAITLIST_EMAIL_INTERVAL_SECONDS=30` - Processing interval
+- `WAITLIST_EMAIL_MAX_RETRIES=3` - Maximum retry attempts
+- `WAITLIST_EMAIL_QUEUE_MAX_SIZE=1000` - Queue capacity limit
+
+### API Endpoints
+- `GET /api/email-queue/stats` - Queue statistics and processing status
+- `POST /api/email-queue/process` - Manual queue processing trigger
+- `POST /api/email-queue/test` - Add test email to queue for verification
+- `POST /api/email-queue/clear` - Clear queue (maintenance only)
+- `GET /api/email-queue/metrics` - Combined waitlist and email metrics
 
 ## Job Scheduler
 
 ### Automated Processing
-- **Scheduler** (`src/jobs/scheduler.js`) - Simple interval-based job system
-- **Order Timeout** (`src/jobs/orderTimeout.js`) - Handles order expiration
-- **Waitlist Processing** (`src/jobs/waitlistProcessing.js`) - Processes waitlist queue
-- Environment-controlled job execution
-- Graceful shutdown handling
+- **Scheduler** (`src/jobs/scheduler.js`) - Interval-based job system with graceful shutdown
+- **Order Timeout** (`src/jobs/orderTimeout.js`) - Cancels expired orders (every 10 minutes)
+- **Waitlist Processing** (`src/jobs/waitlistProcessing.js`) - Auto-reserves licenses and processes queue (every 30 seconds)
+- **Invoice Processing** (`src/jobs/invoiceProcessing.js`) - Generates Siigo invoices for paid transactions (hourly)
+
+### Environment Controls
+- `ENABLE_WAITLIST_PROCESSING=true/false` - Controls waitlist job execution
+- `ENABLE_INVOICE_PROCESSING=true/false` - Controls invoice generation
+- Jobs are disabled in test environment automatically
+
+### Job Management API
+- `GET /api/admin/jobs/status` - Status of all registered jobs
+- `POST /api/admin/jobs/:jobName/start` - Start specific job manually
+- `POST /api/admin/jobs/:jobName/stop` - Stop specific job
+- `POST /api/admin/jobs/invoice/run` - Execute invoice processing manually
 
 ## Security & Rate Limiting
 
@@ -230,4 +256,48 @@ Stock Added → License Reserved → Processing Job → License SOLD → Email Q
 - Rate limiting on payment and order endpoints
 - CSRF protection for admin operations
 - Input sanitization across all public endpoints
-- Webhook signature verification
+- Webhook signature verification with HMAC-SHA256
+
+## Application Startup Sequence
+
+### Critical Initialization Order
+1. **Environment Validation** - Validates 50+ required variables across 7 categories
+2. **Database Connection** - PostgreSQL with connection pooling (5-20 connections)
+3. **Model Synchronization** - Auto-sync in development, manual migrations in production
+4. **Super Admin Creation** - Ensures administrative access exists
+5. **Payment Provider Authentication** - Concurrent OAuth2 initialization for Cobre
+6. **External Service Connections** - Siigo invoicing and webhook subscriptions
+7. **Job Scheduler Startup** - Background processing for orders, waitlist, and invoices
+8. **Email Queue Initialization** - Asynchronous email processing service
+
+### Environment Variables for Startup
+**Required for basic operation:**
+- `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASS`
+- `JWT_SECRET` (minimum 32 characters)
+- `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD`
+
+**Required for payment processing:**
+- `COBRE_USER_ID`, `COBRE_SECRET`, `COBRE_BASE_URL`
+- `COBRE_WEBHOOK_URL`, `COBRE_WEBHOOK_SECRET`
+
+**Required for invoicing:**
+- `SIIGO_API_URL`, `SIIGO_USERNAME`, `SIIGO_ACCESS_KEY`, `SIIGO_PARTNER_ID`
+- `SIIGO_SALES_DOCUMENT_ID`, `SIIGO_SELLER_ID`, `SIIGO_PAYMENT_TYPE_ID`
+
+### Schema Management
+- `SCHEMA_ALTER=1` - Enables automatic schema updates in development
+- Production environments require manual migrations for safety
+- Database initialization includes indexes and constraints optimization
+
+## Transaction Management
+
+### Database Transactions
+- **TransactionManager** (`src/utils/transactionManager.js`) provides isolation levels
+- **SERIALIZABLE** isolation for inventory operations to prevent race conditions
+- **SELECT FOR UPDATE** locking for critical license and waitlist operations
+- Automatic rollback on errors with comprehensive logging
+
+### Concurrency Handling
+- License reservation uses database-level locking
+- Waitlist processing handles concurrent order processing
+- Authentication tokens managed thread-safely across requests

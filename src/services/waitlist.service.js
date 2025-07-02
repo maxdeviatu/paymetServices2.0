@@ -138,22 +138,23 @@ class WaitlistService {
           transaction: t
         })
 
-        // Reservar licencias y actualizar entradas
+        // PASO 3: Apartar licencias como RESERVED y preparar para envío de emails
         const reservations = []
+        
         for (let i = 0; i < licenses.length; i++) {
           const license = licenses[i]
           const entry = waitlistEntries[i]
 
-          // Reservar licencia
+          // Apartar licencia como RESERVED (no SOLD todavía)
           await license.update({
             status: 'RESERVED',
-            waitlistEntryId: entry.id,
             reservedAt: new Date()
           }, { transaction: t })
 
-          // Actualizar entrada de lista de espera
+          // Actualizar entrada de lista de espera a READY_FOR_EMAIL
+          // Las órdenes permanecen en IN_PROCESS hasta confirmar email
           await entry.update({
-            status: 'RESERVED',
+            status: 'READY_FOR_EMAIL',
             licenseId: license.id
           }, { transaction: t })
 
@@ -189,12 +190,12 @@ class WaitlistService {
   }
 
   /**
-   * Procesar licencias reservadas (llamado por el job)
-   * Ahora solo actualiza estados, no envía correos inmediatamente
+   * Procesar entradas listas para envío de email (llamado por el job)
+   * Envía UN email cada vez que se ejecuta (intervalo de 30 segundos)
    */
   async processReservedLicenses() {
     try {
-      logger.logBusiness('waitlist:process.start')
+      logger.logBusiness('waitlist:emailProcess.start')
 
       const results = {
         processed: 0,
@@ -203,10 +204,10 @@ class WaitlistService {
         errors: []
       }
 
-      // Obtener entradas con licencias reservadas
-      const reservedEntries = await WaitlistEntry.findAll({
+      // Obtener UNA entrada lista para email (FIFO)
+      const readyEntry = await WaitlistEntry.findOne({
         where: {
-          status: 'RESERVED'
+          status: 'READY_FOR_EMAIL'
         },
         include: [
           {
@@ -217,52 +218,55 @@ class WaitlistService {
             association: 'license'
           }
         ],
-        order: [['priority', 'ASC']]
+        order: [['priority', 'ASC']]  // FIFO - el más antiguo primero
       })
 
-      if (reservedEntries.length === 0) {
-        logger.logBusiness('waitlist:process.noEntries')
+      if (!readyEntry) {
+        logger.logBusiness('waitlist:emailProcess.noEntries')
         return results
       }
 
-      // Procesar cada entrada secuencialmente para mantener el orden
-      for (const entry of reservedEntries) {
-        try {
-          await this.processSingleEntryWithQueue(entry)
-          results.processed++
-          results.queued++
-        } catch (error) {
-          logger.logError(error, {
-            operation: 'processSingleEntryWithQueue',
-            waitlistEntryId: entry.id,
-            orderId: entry.orderId
+      // Procesar UNA SOLA entrada por ejecución
+      try {
+        await this.processSingleEmailEntry(readyEntry)
+        results.processed++
+        results.queued++
+        
+        logger.logBusiness('waitlist:emailProcess.singleSuccess', {
+          waitlistEntryId: readyEntry.id,
+          orderId: readyEntry.orderId,
+          customerEmail: readyEntry.order?.customer?.email
+        })
+      } catch (error) {
+        logger.logError(error, {
+          operation: 'processSingleEmailEntry',
+          waitlistEntryId: readyEntry.id,
+          orderId: readyEntry.orderId
+        })
+
+        // Marcar como fallido si excede reintentos
+        if (readyEntry.retryCount >= 3) {
+          await readyEntry.update({
+            status: 'FAILED',
+            errorMessage: error.message
           })
-
-          // Marcar como fallido si excede reintentos
-          if (entry.retryCount >= 3) {
-            await entry.update({
-              status: 'FAILED',
-              errorMessage: error.message,
-              processedAt: new Date()
-            })
-            results.failed++
-          } else {
-            // Incrementar contador de reintentos
-            await entry.update({
-              retryCount: entry.retryCount + 1,
-              errorMessage: error.message
-            })
-          }
-
-          results.errors.push({
-            waitlistEntryId: entry.id,
-            orderId: entry.orderId,
-            error: error.message
+          results.failed++
+        } else {
+          // Incrementar contador de reintentos
+          await readyEntry.update({
+            retryCount: readyEntry.retryCount + 1,
+            errorMessage: error.message
           })
         }
+
+        results.errors.push({
+          waitlistEntryId: readyEntry.id,
+          orderId: readyEntry.orderId,
+          error: error.message
+        })
       }
 
-      logger.logBusiness('waitlist:process.completed', results)
+      logger.logBusiness('waitlist:emailProcess.completed', results)
       return results
     } catch (error) {
       logger.logError(error, {
@@ -270,6 +274,90 @@ class WaitlistService {
       })
       throw error
     }
+  }
+
+  /**
+   * Procesar una entrada individual para envío de email
+   * SOLO después del envío exitoso: completa orden y vende licencia
+   */
+  async processSingleEmailEntry(entry) {
+    try {
+      // Marcar como PROCESSING
+      await entry.update({ status: 'PROCESSING' })
+
+      logger.logBusiness('waitlist:emailProcess.sendingEmail', {
+        waitlistEntryId: entry.id,
+        orderId: entry.orderId,
+        licenseId: entry.licenseId,
+        customerEmail: entry.order?.customer?.email
+      })
+
+      // Enviar email directamente (sin cola, ya que controlamos el flujo)
+      await emailService.sendLicenseEmail({
+        customer: entry.order.customer,
+        product: entry.order.product,
+        license: entry.license,
+        order: entry.order
+      })
+
+      // ✅ EMAIL ENVIADO EXITOSAMENTE - AHORA SÍ COMPLETAR TODO
+      await this.completeOrderAfterEmailSent(entry)
+
+      logger.logBusiness('waitlist:emailProcess.emailSent', {
+        waitlistEntryId: entry.id,
+        orderId: entry.orderId,
+        customerEmail: entry.order.customer.email,
+        message: 'License email sent and order completed successfully'
+      })
+
+    } catch (error) {
+      logger.logError(error, {
+        operation: 'processSingleEmailEntry',
+        waitlistEntryId: entry.id,
+        orderId: entry.orderId
+      })
+      throw error
+    }
+  }
+
+  /**
+   * Completar orden y vender licencia SOLO después de confirmar envío de email
+   */
+  async completeOrderAfterEmailSent(entry) {
+    return await TransactionManager.executeInventoryTransaction(async (t) => {
+      const { Order } = require('../models')
+
+      // 1. Actualizar licencia de RESERVED → SOLD
+      await License.update({
+        status: 'SOLD',
+        orderId: entry.orderId,
+        soldAt: new Date()
+      }, {
+        where: { id: entry.licenseId },
+        transaction: t
+      })
+
+      // 2. Completar la orden de IN_PROCESS → COMPLETED
+      await Order.update({
+        status: 'COMPLETED'
+      }, {
+        where: { id: entry.orderId },
+        transaction: t
+      })
+
+      // 3. Marcar entrada como completada
+      await entry.update({
+        status: 'COMPLETED',
+        processedAt: new Date()
+      }, { transaction: t })
+
+      logger.logBusiness('waitlist:orderCompleted', {
+        waitlistEntryId: entry.id,
+        orderId: entry.orderId,
+        licenseId: entry.licenseId,
+        message: 'Order completed after email confirmation'
+      })
+    })
   }
 
   /**
@@ -312,7 +400,16 @@ class WaitlistService {
         soldAt: new Date()
       }, { transaction: t })
 
-      // Marcar entrada como completada (sin completar la orden aún)
+      // Completar la orden - ESTO FALTABA!
+      const { Order } = require('../models')
+      await Order.update({
+        status: 'COMPLETED'
+      }, {
+        where: { id: entry.orderId },
+        transaction: t
+      })
+
+      // Marcar entrada como completada
       await currentEntry.update({
         status: 'COMPLETED',
         processedAt: new Date()
@@ -327,15 +424,25 @@ class WaitlistService {
 
     // Después de la transacción, agregar a la cola de correos
     try {
+      logger.logBusiness('waitlist:process.entry.queuingEmail', {
+        waitlistEntryId: entry.id,
+        orderId: entry.orderId,
+        licenseId: entry.licenseId
+      })
+      
       await emailQueueService.queueLicenseEmail(entry)
+      
       logger.logBusiness('waitlist:process.entry.queued', {
         waitlistEntryId: entry.id,
-        orderId: entry.orderId
+        orderId: entry.orderId,
+        message: 'Email successfully queued for processing'
       })
     } catch (emailError) {
       logger.logError(emailError, {
         operation: 'queueLicenseEmail',
-        waitlistEntryId: entry.id
+        waitlistEntryId: entry.id,
+        errorMessage: emailError.message,
+        errorStack: emailError.stack
       })
       // No lanzamos el error aquí para no fallar la transacción principal
     }
@@ -493,15 +600,16 @@ class WaitlistService {
     try {
       const whereClause = productRef ? { productRef } : {}
 
-      const [pending, reserved, processing, completed, failed] = await Promise.all([
+      const [pending, reserved, processing, readyForEmail, completed, failed] = await Promise.all([
         WaitlistEntry.count({ where: { ...whereClause, status: 'PENDING' } }),
         WaitlistEntry.count({ where: { ...whereClause, status: 'RESERVED' } }),
         WaitlistEntry.count({ where: { ...whereClause, status: 'PROCESSING' } }),
+        WaitlistEntry.count({ where: { ...whereClause, status: 'READY_FOR_EMAIL' } }),
         WaitlistEntry.count({ where: { ...whereClause, status: 'COMPLETED' } }),
         WaitlistEntry.count({ where: { ...whereClause, status: 'FAILED' } })
       ])
 
-      const total = pending + reserved + processing + completed + failed
+      const total = pending + reserved + processing + readyForEmail + completed + failed
 
       // Obtener estadísticas de la cola de correos
       const emailQueueStats = emailQueueService.getQueueStats()
@@ -512,6 +620,7 @@ class WaitlistService {
           pending,
           reserved,
           processing,
+          readyForEmail,
           completed,
           failed,
           productRef

@@ -16,7 +16,7 @@ class EmailService {
    */
   async sendLicenseEmail ({ customer, product, license, order }) {
     try {
-      logger.logBusiness('email:license', {
+      logger.logBusiness('email:license.start', {
         orderId: order.id,
         customerId: customer.id,
         licenseId: license.id,
@@ -24,15 +24,15 @@ class EmailService {
         customerEmail: customer.email
       })
 
-      await sendEmail({
+      const result = await sendEmail({
         to: { 
           email: customer.email, 
-          name: `${customer.firstName} ${customer.lastName}` 
+          name: `${customer.first_name} ${customer.last_name}` 
         },
         subject: `Tu producto ${product.name} está listo`,
         templateName: 'license-delivery',
         variables: {
-          customerName: `${customer.firstName} ${customer.lastName}`,
+          customerName: `${customer.first_name} ${customer.last_name}`,
           productName: product.name,
           licenseKey: license.licenseKey,
           instructions: license.instructions || null,
@@ -43,7 +43,16 @@ class EmailService {
         }
       })
 
-      return { success: true, messageId: `license-${order.id}-${Date.now()}` }
+      logger.logBusiness('email:license.success', {
+        orderId: order.id,
+        customerId: customer.id,
+        licenseId: license.id,
+        customerEmail: customer.email,
+        messageId: result.messageId,
+        success: result.success
+      })
+
+      return result
     } catch (error) {
       logger.logError(error, {
         operation: 'sendLicenseEmail',
@@ -71,12 +80,12 @@ class EmailService {
       await sendEmail({
         to: { 
           email: customer.email, 
-          name: `${customer.firstName} ${customer.lastName}` 
+          name: `${customer.first_name} ${customer.last_name}` 
         },
         subject: 'Estás en la lista de espera',
         templateName: 'waitlist-notification',
         variables: {
-          customerName: `${customer.firstName} ${customer.lastName}`,
+          customerName: `${customer.first_name} ${customer.last_name}`,
           productName: product.name,
           orderId: order.id,
           purchaseDate: order.createdAt.toLocaleDateString('es-CO'),

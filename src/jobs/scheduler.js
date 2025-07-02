@@ -44,16 +44,22 @@ class JobScheduler {
     // Register default jobs
     this.registerJob(OrderTimeoutJob)
     
-    // Solo registrar waitlist job si está habilitado
+    // Siempre registrar waitlist job para permitir ejecución manual
+    this.registerJob(WaitlistProcessingJob)
+    
     if (process.env.ENABLE_WAITLIST_PROCESSING === 'true') {
-      this.registerJob(WaitlistProcessingJob)
-      logger.info('✅ Waitlist processing job habilitado')
+      logger.info('✅ Waitlist processing job habilitado para ejecución automática')
     } else {
-      logger.info('⏸️  Waitlist processing job pausado (ENABLE_WAITLIST_PROCESSING=false)')
+      logger.info('⏸️  Waitlist processing job registrado pero pausado (ENABLE_WAITLIST_PROCESSING=false)')
     }
 
     // Start each job based on its schedule
     for (const [name, job] of this.jobs) {
+      // Solo iniciar automáticamente si está habilitado o no es waitlist
+      if (name === 'waitlistProcessing' && process.env.ENABLE_WAITLIST_PROCESSING !== 'true') {
+        logger.info(`Job ${name} registrado pero no iniciado automáticamente`)
+        continue
+      }
       this.startJob(name)
     }
 
@@ -200,10 +206,8 @@ if (process.env.NODE_ENV !== 'test') {
   // Always register order timeout job
   jobScheduler.registerJob(OrderTimeoutJob)
   
-  // Only register waitlist processing if enabled
-  if (process.env.ENABLE_WAITLIST_PROCESSING === 'true') {
-    jobScheduler.registerJob(WaitlistProcessingJob)
-  }
+  // Always register waitlist processing (for manual execution even if disabled)
+  jobScheduler.registerJob(WaitlistProcessingJob)
   
   // Only register invoice processing if enabled
   if (process.env.ENABLE_INVOICE_PROCESSING !== 'false') {
