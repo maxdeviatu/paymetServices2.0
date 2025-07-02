@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Estás en la lista de espera</title>
+  </head>
+  <body style="margin:0; padding:0; background-color:#f3f4f6;">
+    <table align="center" width="100%" cellpadding="0" cellspacing="0" style="padding: 40px 0;">
+      <tr>
+        <td align="center">
+          <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff; border-radius:8px; overflow:hidden; font-family:Arial, sans-serif;">
+            
+            <!-- Header con imagen de banner -->
+            <tr>
+              <td>
+                <img src="https://cdn.prod.website-files.com/66d789e4de77bc0e046b9d8c/66f4728822277358ccdfcb3a_Delivery.webp" alt="Innovate Learning" style="width: 100%; height: auto; display: block;">
+              </td>
+            </tr>
+
+            <!-- Body -->
+            <tr>
+              <td style="padding: 40px 24px; text-align: left;">
+                
+                <!-- Titulo -->
+                <h1 style="color: #333; font-size: 28px; font-weight: bold; margin-bottom: 24px; text-align: center;">¡Hola, {{customerName}}!</h1>
+                
+                <h2 style="color: #333; font-size: 24px; margin-bottom: 20px;">Gracias por tu compra y por confiar en Innovate Learning!</h2>
+                
+                <!-- Mensaje principal -->
+                <p style="color: #555; font-size: 16px; line-height: 1.6; margin-bottom: 24px;">
+                  Tu pedido ha sido registrado con éxito. En este momento, estamos a la espera de nuevas unidades, pero no te preocupes, garantizamos que recibirás tu código para continuar con tu aprendizaje tan pronto nos llegue.
+                </p>
+
+                <p style="color: #555; font-size: 16px; line-height: 1.6; margin-bottom: 24px;">
+                  Te mantendremos informado sobre el estado de tu pedido y te avisaremos en cuanto esté listo para el envío.
+                </p>
+
+                <!-- Información del pedido -->
+                {{#if productName}}
+                <div style="background-color:#fef3c7; border-radius:8px; padding:24px; margin:24px 0; border-left: 4px solid #f59e0b;">
+                  <h3 style="color: #92400e; font-size: 18px; margin: 0 0 16px 0;">📋 Información de tu pedido:</h3>
+                  <table width="100%" style="border-collapse:collapse;">
+                    <tr>
+                      <td style="padding:8px 0; color:#92400e; font-size:16px; font-weight:bold;">Producto:</td>
+                      <td style="padding:8px 0; color:#92400e; font-size:16px; text-align:right;">{{productName}}</td>
+                    </tr>
+                    {{#if orderId}}
+                    <tr>
+                      <td style="padding:8px 0; color:#92400e; font-size:16px; font-weight:bold;">Número de orden:</td>
+                      <td style="padding:8px 0; color:#92400e; font-size:16px; text-align:right;">#{{orderId}}</td>
+                    </tr>
+                    {{/if}}
+                    <tr>
+                      <td style="padding:8px 0; color:#92400e; font-size:16px; font-weight:bold;">Estado:</td>
+                      <td style="padding:8px 0; color:#92400e; font-size:16px; font-weight:bold; text-align:right;">En lista de espera</td>
+                    </tr>
+                    {{#if estimatedTime}}
+                    <tr>
+                      <td style="padding:8px 0; color:#92400e; font-size:16px; font-weight:bold;">Tiempo estimado:</td>
+                      <td style="padding:8px 0; color:#92400e; font-size:16px; text-align:right;">{{estimatedTime}}</td>
+                    </tr>
+                    {{/if}}
+                    {{#if purchaseDate}}
+                    <tr>
+                      <td style="padding:8px 0; color:#92400e; font-size:16px; font-weight:bold;">Fecha de compra:</td>
+                      <td style="padding:8px 0; color:#92400e; font-size:16px; text-align:right;">{{purchaseDate}}</td>
+                    </tr>
+                    {{/if}}
+                  </table>
+                </div>
+                {{/if}}
+
+                <!-- Mensaje de tranquilidad -->
+                <div style="background-color:#f0fdf4; border-radius:8px; padding:20px; margin:24px 0; border-left: 4px solid #16a34a;">
+                  <p style="color: #166534; font-size: 16px; line-height: 1.6; margin: 0; font-weight: 500;">
+                    ✅ Tu pago ha sido procesado correctamente y tu lugar en la lista de espera está garantizado.
+                  </p>
+                </div>
+
+              </td>
+            </tr>
+
+            <!-- Footer de soporte -->
+            <tr>
+              <td style="background-color: #f7f7f7; padding: 24px; text-align: center;">
+                <p style="font-size: 14px; color: #777; line-height: 1.6; margin: 0;">
+                  En caso de dudas, quejas, peticiones o reclamos, puedes contactarnos a través de 
+                  <a href="mailto:student.experience@innovatelearning.com.co" style="color: #2563eb; text-decoration: none; font-weight: 500;">student.experience@innovatelearning.com.co</a>
+                  <br>
+                  También puedes escribirnos por 
+                  <a href="{{whatsappLink}}" target="_blank" style="color: #25d366; text-decoration: none; font-weight: 500;">WhatsApp</a>
+                </p>
+                <p style="font-size: 12px; color: #999; margin: 16px 0 0 0;">© Innovate Learning • Bogotá, Colombia</p>
+              </td>
+            </tr>
+
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

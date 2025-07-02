@@ -1,13 +1,14 @@
 const logger = require('../../config/logger')
+const { sendEmail } = require('./brevoService')
 
 /**
  * Email service for license notifications
- * In development, logs emails instead of sending them
+ * Now uses Brevo and Handlebars templates
  */
 class EmailService {
   constructor () {
-    this.provider = process.env.EMAIL_PROVIDER || 'log'
-    this.from = process.env.EMAIL_FROM || 'noreply@innovatelearning.com.co'
+    this.provider = process.env.EMAIL_PROVIDER || 'brevo'
+    this.from = process.env.BREVO_SENDER_EMAIL || 'noreply@innovatelearning.com.co'
   }
 
   /**
@@ -15,22 +16,6 @@ class EmailService {
    */
   async sendLicenseEmail ({ customer, product, license, order }) {
     try {
-      const emailData = {
-        to: customer.email,
-        from: this.from,
-        subject: `Tu licencia para ${product.name} está lista`,
-        template: 'license-delivery',
-        data: {
-          customerName: `${customer.firstName} ${customer.lastName}`,
-          productName: product.name,
-          licenseKey: license.licenseKey,
-          instructions: license.instructions || 'Contacta a soporte para instrucciones de activación',
-          orderId: order.id,
-          purchaseDate: order.createdAt.toLocaleDateString('es-CO'),
-          supportEmail: 'soporte@innovatelearning.com.co'
-        }
-      }
-
       logger.logBusiness('email:license', {
         orderId: order.id,
         customerId: customer.id,
@@ -39,13 +24,24 @@ class EmailService {
         customerEmail: customer.email
       })
 
-      if (process.env.NODE_ENV === 'development') {
-        // In development, just log the email
-        await this.logEmail(emailData)
-      } else {
-        // In production, send actual email
-        await this.sendEmail(emailData)
-      }
+      await sendEmail({
+        to: { 
+          email: customer.email, 
+          name: `${customer.firstName} ${customer.lastName}` 
+        },
+        subject: `Tu producto ${product.name} está listo`,
+        templateName: 'license-delivery',
+        variables: {
+          customerName: `${customer.firstName} ${customer.lastName}`,
+          productName: product.name,
+          licenseKey: license.licenseKey,
+          instructions: license.instructions || null,
+          orderId: order.id,
+          purchaseDate: order.createdAt.toLocaleDateString('es-CO'),
+          supportEmail: 'administrativo@innovatelearning.com.co',
+          whatsappLink: 'https://wa.link/b6dl4y'
+        }
+      })
 
       return { success: true, messageId: `license-${order.id}-${Date.now()}` }
     } catch (error) {
@@ -64,21 +60,6 @@ class EmailService {
    */
   async sendWaitlistNotification ({ customer, product, order, waitlistEntry }) {
     try {
-      const emailData = {
-        to: customer.email,
-        from: this.from,
-        subject: `Tu compra está en lista de espera - ${product.name}`,
-        template: 'waitlist-notification',
-        data: {
-          customerName: `${customer.firstName} ${customer.lastName}`,
-          productName: product.name,
-          orderId: order.id,
-          purchaseDate: order.createdAt.toLocaleDateString('es-CO'),
-          estimatedTime: '24-48 horas',
-          supportEmail: 'soporte@innovatelearning.com.co'
-        }
-      }
-
       logger.logBusiness('email:waitlistNotification', {
         orderId: order.id,
         customerId: customer.id,
@@ -87,13 +68,22 @@ class EmailService {
         customerEmail: customer.email
       })
 
-      if (process.env.NODE_ENV === 'development') {
-        // In development, just log the email
-        await this.logEmail(emailData)
-      } else {
-        // In production, send actual email
-        await this.sendEmail(emailData)
-      }
+      await sendEmail({
+        to: { 
+          email: customer.email, 
+          name: `${customer.firstName} ${customer.lastName}` 
+        },
+        subject: 'Estás en la lista de espera',
+        templateName: 'waitlist-notification',
+        variables: {
+          customerName: `${customer.firstName} ${customer.lastName}`,
+          productName: product.name,
+          orderId: order.id,
+          purchaseDate: order.createdAt.toLocaleDateString('es-CO'),
+          estimatedTime: '24-48 horas',
+          whatsappLink: 'https://wa.link/b6dl4y'
+        }
+      })
 
       return { success: true, messageId: `waitlist-${order.id}-${Date.now()}` }
     } catch (error) {
@@ -105,198 +95,6 @@ class EmailService {
       })
       throw error
     }
-  }
-
-  /**
-   * Send order confirmation email
-   */
-  async sendOrderConfirmation ({ customer, product, order, transaction }) {
-    try {
-      const emailData = {
-        to: customer.email,
-        from: this.from,
-        subject: `Confirmación de compra - Orden #${order.id}`,
-        template: 'order-confirmation',
-        data: {
-          customerName: `${customer.firstName} ${customer.lastName}`,
-          orderId: order.id,
-          productName: product.name,
-          qty: order.qty,
-          subtotal: (order.subtotal / 100).toFixed(2),
-          discountTotal: (order.discountTotal / 100).toFixed(2),
-          grandTotal: (order.grandTotal / 100).toFixed(2),
-          currency: transaction.currency,
-          purchaseDate: order.createdAt.toLocaleDateString('es-CO'),
-          paymentMethod: transaction.paymentMethod || 'Pago online'
-        }
-      }
-
-      logger.logBusiness('email:orderConfirmation', {
-        orderId: order.id,
-        customerId: customer.id,
-        customerEmail: customer.email
-      })
-
-      if (process.env.NODE_ENV === 'development') {
-        await this.logEmail(emailData)
-      } else {
-        await this.sendEmail(emailData)
-      }
-
-      return { success: true, messageId: `order-${order.id}-${Date.now()}` }
-    } catch (error) {
-      logger.logError(error, {
-        operation: 'sendOrderConfirmation',
-        orderId: order.id,
-        customerId: customer.id
-      })
-      throw error
-    }
-  }
-
-  /**
-   * Log email in development
-   */
-  async logEmail (emailData) {
-    const emailContent = this.renderTemplate(emailData.template, emailData.data)
-
-    logger.info('📧 EMAIL (Development Mode)', {
-      to: emailData.to,
-      from: emailData.from,
-      subject: emailData.subject,
-      template: emailData.template,
-      content: emailContent
-    })
-
-    // Simulate email delivery delay
-    await new Promise(resolve => setTimeout(resolve, 100))
-  }
-
-  /**
-   * Send actual email (production)
-   */
-  async sendEmail (emailData) {
-    // TODO: Implement actual email sending
-    // This could use SendGrid, AWS SES, or another email provider
-    const emailContent = this.renderTemplate(emailData.template, emailData.data)
-
-    logger.info('Sending email via provider', {
-      provider: this.provider,
-      to: emailData.to,
-      subject: emailData.subject
-    })
-
-    // For now, just log it
-    console.log(`EMAIL TO: ${emailData.to}`)
-    console.log(`SUBJECT: ${emailData.subject}`)
-    console.log(`CONTENT:\n${emailContent}`)
-
-    return { messageId: `email-${Date.now()}`, provider: this.provider }
-  }
-
-  /**
-   * Render email template
-   */
-  renderTemplate (templateName, data) {
-    switch (templateName) {
-      case 'license-delivery':
-        return this.renderLicenseTemplate(data)
-      case 'waitlist-notification':
-        return this.renderWaitlistNotificationTemplate(data)
-      case 'order-confirmation':
-        return this.renderOrderConfirmationTemplate(data)
-      default:
-        return 'Template not found'
-    }
-  }
-
-  /**
-   * Render license delivery template
-   */
-  renderLicenseTemplate (data) {
-    return `
-¡Hola ${data.customerName}!
-
-¡Tu compra ha sido procesada exitosamente! 
-
-📋 DETALLES DE TU LICENCIA:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• Producto: ${data.productName}
-• Clave de Licencia: ${data.licenseKey}
-• Orden: #${data.orderId}
-• Fecha de compra: ${data.purchaseDate}
-
-🔧 INSTRUCCIONES DE ACTIVACIÓN:
-${data.instructions}
-
-💬 ¿NECESITAS AYUDA?
-Si tienes alguna pregunta o problema con tu licencia, no dudes en contactarnos:
-📧 Email: ${data.supportEmail}
-
-¡Gracias por tu compra!
-
-El equipo de Innovate Learning
-    `.trim()
-  }
-
-  /**
-   * Render waitlist notification template
-   */
-  renderWaitlistNotificationTemplate (data) {
-    return `
-¡Hola ${data.customerName}!
-
-Tu pago ha sido procesado exitosamente, pero actualmente no tenemos licencias disponibles para ${data.productName}.
-
-📋 ESTADO DE TU ORDEN:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• Orden: #${data.orderId}
-• Producto: ${data.productName}
-• Estado: En lista de espera
-• Tiempo estimado: ${data.estimatedTime}
-• Fecha de compra: ${data.purchaseDate}
-
-⏰ ¿QUÉ PASA AHORA?
-Te hemos agregado a nuestra lista de espera y procesaremos tu licencia tan pronto como tengamos stock disponible. Te notificaremos automáticamente cuando tu licencia esté lista.
-
-💬 ¿NECESITAS AYUDA?
-Si tienes alguna pregunta sobre tu orden, no dudes en contactarnos:
-📧 Email: ${data.supportEmail}
-
-¡Gracias por tu paciencia!
-
-El equipo de Innovate Learning
-    `.trim()
-  }
-
-  /**
-   * Render order confirmation template
-   */
-  renderOrderConfirmationTemplate (data) {
-    return `
-¡Hola ${data.customerName}!
-
-Te confirmamos que hemos recibido tu orden correctamente.
-
-📋 RESUMEN DE TU ORDEN:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• Orden: #${data.orderId}
-• Producto: ${data.productName}
-• Cantidad: ${data.qty}
-• Subtotal: $${data.subtotal} ${data.currency}
-• Descuento: -$${data.discountTotal} ${data.currency}
-• Total: $${data.grandTotal} ${data.currency}
-• Método de pago: ${data.paymentMethod}
-• Fecha: ${data.purchaseDate}
-
-${data.productName.toLowerCase().includes('licencia') || data.productName.toLowerCase().includes('software')
-  ? '🚀 Tu licencia será enviada por email en los próximos minutos.'
-  : '📦 Tu pedido será procesado y recibirás actualizaciones por email.'}
-
-¡Gracias por tu compra!
-
-El equipo de Innovate Learning
-    `.trim()
   }
 }
 
