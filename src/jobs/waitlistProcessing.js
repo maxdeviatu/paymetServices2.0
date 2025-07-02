@@ -31,8 +31,8 @@ class WaitlistProcessingJob {
       // Paso 1: Reservar automáticamente licencias disponibles para entradas PENDING
       const reserveResults = await this.autoReserveLicenses()
       
-      // Paso 2: Procesar entradas RESERVED (enviar emails con control de tiempo)
-      const processResults = await waitlistService.processReservedLicenses()
+      // Paso 2: Procesar una entrada READY_FOR_EMAIL (enviar email con control de tiempo)
+      const processResults = await waitlistService.processNextReservedEntry()
       
       const duration = Date.now() - startTime
       const combinedResults = {
@@ -93,24 +93,22 @@ class WaitlistProcessingJob {
 
       // Para cada producto, intentar reservar licencias
       for (const productData of pendingProducts) {
-        const productRef = productData.productRef
-        
         try {
-          const reserveResult = await waitlistService.reserveAvailableLicenses(productRef)
+          const reserveResult = await waitlistService.reserveAvailableLicenses(productData.productRef)
           
           if (reserveResult.reserved > 0) {
-            logger.info(`AutoReserve: Reserved ${reserveResult.reserved} licenses for ${productRef}`)
+            logger.info(`AutoReserve: Reserved ${reserveResult.reserved} licenses for ${productData.productRef}`)
             results.totalReserved += reserveResult.reserved
             results.details.push({
-              productRef,
+              productRef: productData.productRef,
               reserved: reserveResult.reserved,
               waitlistCount: reserveResult.waitlistCount
             })
           }
         } catch (error) {
-          logger.error(`AutoReserve: Error reserving licenses for ${productRef}:`, error.message)
+          logger.error(`AutoReserve: Error reserving licenses for ${productData.productRef}:`, error.message)
           results.details.push({
-            productRef,
+            productRef: productData.productRef,
             reserved: 0,
             error: error.message
           })

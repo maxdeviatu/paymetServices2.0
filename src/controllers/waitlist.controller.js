@@ -99,7 +99,7 @@ exports.reserveLicenses = async (req, res) => {
  */
 exports.processReservedLicenses = async (req, res) => {
   try {
-    const result = await waitlistService.processReservedLicenses()
+    const result = await waitlistService.processNextReservedEntry()
 
     res.json({
       success: true,

@@ -190,10 +190,10 @@ class WaitlistService {
   }
 
   /**
-   * Procesar entradas listas para envío de email (llamado por el job)
+   * Procesar una entrada lista para envío de email (llamado por el job)
    * Envía UN email cada vez que se ejecuta (intervalo de 30 segundos)
    */
-  async processReservedLicenses() {
+  async processNextReservedEntry() {
     try {
       logger.logBusiness('waitlist:emailProcess.start')
 
@@ -228,7 +228,7 @@ class WaitlistService {
 
       // Procesar UNA SOLA entrada por ejecución
       try {
-        await this.processSingleEmailEntry(readyEntry)
+        await this.processWaitlistEntryWithEmail(readyEntry)
         results.processed++
         results.queued++
         
@@ -239,7 +239,7 @@ class WaitlistService {
         })
       } catch (error) {
         logger.logError(error, {
-          operation: 'processSingleEmailEntry',
+          operation: 'processWaitlistEntryWithEmail',
           waitlistEntryId: readyEntry.id,
           orderId: readyEntry.orderId
         })
@@ -280,7 +280,7 @@ class WaitlistService {
    * Procesar una entrada individual para envío de email
    * SOLO después del envío exitoso: completa orden y vende licencia
    */
-  async processSingleEmailEntry(entry) {
+  async processWaitlistEntryWithEmail(entry) {
     try {
       // Marcar como PROCESSING
       await entry.update({ status: 'PROCESSING' })
@@ -360,238 +360,9 @@ class WaitlistService {
     })
   }
 
-  /**
-   * Procesar una entrada individual de la lista de espera (nueva versión con cola)
-   * Actualiza estados pero delega el envío de correo a la cola
-   */
-  async processSingleEntryWithQueue(entry) {
-    return await TransactionManager.executeInventoryTransaction(async (t) => {
-      // Verificar que la entrada sigue reservada
-      const currentEntry = await WaitlistEntry.findByPk(entry.id, {
-        where: { status: 'RESERVED' },
-        lock: t.LOCK.UPDATE,
-        transaction: t
-      })
 
-      if (!currentEntry) {
-        throw new Error('Entry no longer reserved')
-      }
 
-      // Marcar como procesando
-      await currentEntry.update({
-        status: 'PROCESSING'
-      }, { transaction: t })
 
-      // Obtener licencia
-      const license = await License.findByPk(entry.licenseId, {
-        where: { status: 'RESERVED' },
-        lock: t.LOCK.UPDATE,
-        transaction: t
-      })
-
-      if (!license) {
-        throw new Error('License not found or not reserved')
-      }
-
-      // Asignar licencia a la orden
-      await license.update({
-        status: 'SOLD',
-        orderId: entry.orderId,
-        soldAt: new Date()
-      }, { transaction: t })
-
-      // Completar la orden - ESTO FALTABA!
-      const { Order } = require('../models')
-      await Order.update({
-        status: 'COMPLETED'
-      }, {
-        where: { id: entry.orderId },
-        transaction: t
-      })
-
-      // Marcar entrada como completada
-      await currentEntry.update({
-        status: 'COMPLETED',
-        processedAt: new Date()
-      }, { transaction: t })
-
-      logger.logBusiness('waitlist:process.entry.success', {
-        waitlistEntryId: entry.id,
-        orderId: entry.orderId,
-        licenseId: license.id
-      })
-    })
-
-    // Después de la transacción, agregar a la cola de correos
-    try {
-      logger.logBusiness('waitlist:process.entry.queuingEmail', {
-        waitlistEntryId: entry.id,
-        orderId: entry.orderId,
-        licenseId: entry.licenseId
-      })
-      
-      await emailQueueService.queueLicenseEmail(entry)
-      
-      logger.logBusiness('waitlist:process.entry.queued', {
-        waitlistEntryId: entry.id,
-        orderId: entry.orderId,
-        message: 'Email successfully queued for processing'
-      })
-    } catch (emailError) {
-      logger.logError(emailError, {
-        operation: 'queueLicenseEmail',
-        waitlistEntryId: entry.id,
-        errorMessage: emailError.message,
-        errorStack: emailError.stack
-      })
-      // No lanzamos el error aquí para no fallar la transacción principal
-    }
-  }
-
-  /**
-   * Procesar una entrada individual de la lista de espera (versión original)
-   * Mantener para compatibilidad con envío inmediato
-   */
-  async processSingleEntry(entry) {
-    return await TransactionManager.executeInventoryTransaction(async (t) => {
-      // Verificar que la entrada sigue reservada
-      const currentEntry = await WaitlistEntry.findByPk(entry.id, {
-        where: { status: 'RESERVED' },
-        lock: t.LOCK.UPDATE,
-        transaction: t
-      })
-
-      if (!currentEntry) {
-        throw new Error('Entry no longer reserved')
-      }
-
-      // Marcar como procesando
-      await currentEntry.update({
-        status: 'PROCESSING'
-      }, { transaction: t })
-
-      // Obtener licencia
-      const license = await License.findByPk(entry.licenseId, {
-        where: { status: 'RESERVED' },
-        lock: t.LOCK.UPDATE,
-        transaction: t
-      })
-
-      if (!license) {
-        throw new Error('License not found or not reserved')
-      }
-
-      // Asignar licencia a la orden
-      await license.update({
-        status: 'SOLD',
-        orderId: entry.orderId,
-        soldAt: new Date()
-      }, { transaction: t })
-
-      // Completar la orden
-      await Order.update({
-        status: 'COMPLETED'
-      }, {
-        where: { id: entry.orderId },
-        transaction: t
-      })
-
-      // Marcar entrada como completada
-      await currentEntry.update({
-        status: 'COMPLETED',
-        processedAt: new Date()
-      }, { transaction: t })
-
-      // Enviar email con licencia
-      setImmediate(async () => {
-        try {
-          await this.sendLicenseEmail(entry)
-        } catch (emailError) {
-          logger.logError(emailError, {
-            operation: 'sendLicenseEmail',
-            waitlistEntryId: entry.id
-          })
-        }
-      })
-
-      logger.logBusiness('waitlist:process.entry.success', {
-        waitlistEntryId: entry.id,
-        orderId: entry.orderId,
-        licenseId: license.id
-      })
-    })
-  }
-
-  /**
-   * Enviar email de notificación de lista de espera
-   */
-  async sendWaitlistNotification(waitlistEntry) {
-    try {
-      const order = await Order.findByPk(waitlistEntry.orderId, {
-        include: ['customer', 'product']
-      })
-
-      if (!order) {
-        throw new Error('Order not found')
-      }
-
-      await emailService.sendWaitlistNotification({
-        customer: order.customer,
-        product: order.product,
-        order,
-        waitlistEntry
-      })
-
-      logger.logBusiness('waitlist:email.notification.sent', {
-        waitlistEntryId: waitlistEntry.id,
-        orderId: order.id,
-        customerEmail: order.customer.email
-      })
-    } catch (error) {
-      logger.logError(error, {
-        operation: 'sendWaitlistNotification',
-        waitlistEntryId: waitlistEntry.id
-      })
-      throw error
-    }
-  }
-
-  /**
-   * Enviar email con licencia
-   */
-  async sendLicenseEmail(waitlistEntry) {
-    try {
-      const order = await Order.findByPk(waitlistEntry.orderId, {
-        include: ['customer', 'product']
-      })
-
-      const license = await License.findByPk(waitlistEntry.licenseId)
-
-      if (!order || !license) {
-        throw new Error('Order or license not found')
-      }
-
-      await emailService.sendLicenseEmail({
-        customer: order.customer,
-        product: order.product,
-        license,
-        order
-      })
-
-      logger.logBusiness('waitlist:email.license.sent', {
-        waitlistEntryId: waitlistEntry.id,
-        orderId: order.id,
-        licenseId: license.id,
-        customerEmail: order.customer.email
-      })
-    } catch (error) {
-      logger.logError(error, {
-        operation: 'sendLicenseEmail',
-        waitlistEntryId: waitlistEntry.id
-      })
-      throw error
-    }
-  }
 
   /**
    * Obtener métricas de la lista de espera incluyendo cola de correos
@@ -730,34 +501,6 @@ class WaitlistService {
     }
   }
 
-  /**
-   * Obtener estadísticas de la cola de correos
-   */
-  getEmailQueueStats() {
-    return emailQueueService.getQueueStats()
-  }
-
-  /**
-   * Limpiar la cola de correos (solo para mantenimiento)
-   */
-  clearEmailQueue() {
-    return emailQueueService.clearQueue()
-  }
-
-  /**
-   * Forzar procesamiento manual de cola de correos
-   */
-  async processEmailQueue() {
-    try {
-      await emailQueueService.processNextEmail()
-      return { success: true, message: 'Email queue processed manually' }
-    } catch (error) {
-      logger.logError(error, {
-        operation: 'processEmailQueue'
-      })
-      throw error
-    }
-  }
 }
 
 module.exports = new WaitlistService() 
