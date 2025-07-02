@@ -10,6 +10,7 @@ const { PORT } = require('./config')
 const jobScheduler = require('./jobs/scheduler')
 const { generalLimiter } = require('./middlewares/rateLimiter')
 const paymentService = require('./services/payment')
+const SiigoInitializer = require('./services/siigoInitializer')
 const EnvironmentValidator = require('./config/envValidator')
 
 const app = express()
@@ -81,6 +82,44 @@ app.use((err, req, res, next) => {
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
   })
 })
+
+/**
+ * Inicializar conexión con Siigo al startup
+ */
+async function initializeSiigoConnection () {
+  try {
+    // Solo intentar conectar si no estamos en modo test
+    if (process.env.NODE_ENV === 'test') {
+      logger.info('Skipping Siigo initialization in test environment')
+      return
+    }
+
+    logger.info('🔗 Inicializando conexión con Siigo...')
+    const result = await SiigoInitializer.initialize()
+    
+    if (result.success) {
+      logger.info('✅ Conexión con Siigo establecida exitosamente', {
+        connected: result.status.connected,
+        lastAttempt: result.status.lastAttempt,
+        tokenExpiration: result.status.tokenExpiration
+      })
+    } else {
+      logger.warn('⚠️ No se pudo establecer conexión con Siigo', {
+        connected: result.status.connected,
+        error: result.error,
+        lastAttempt: result.status.lastAttempt
+      })
+    }
+  } catch (error) {
+    logger.error('❌ Error durante la inicialización de Siigo', {
+      error: error.message,
+      stack: error.stack
+    })
+    
+    // No fallar el servidor por problemas con Siigo
+    logger.warn('El servidor continuará sin conexión a Siigo')
+  }
+}
 
 /**
  * Inicializar suscripción de webhooks de Cobre
@@ -179,6 +218,9 @@ async function initializeServer () {
       paymentService.initialize()
         .then(async () => {
           logger.info('Payment providers initialization completed')
+
+          // Inicializar conexión con Siigo
+          await initializeSiigoConnection()
 
           // Inicializar suscripción de webhooks de Cobre después de los proveedores
           await initializeCobreWebhookSubscription()

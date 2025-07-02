@@ -53,6 +53,15 @@ const Transaction = sequelize.define('Transaction', {
     defaultValue: 'NOT_REQUIRED',
     comment: 'Invoice generation status'
   },
+  
+  // ID de la factura generada por el proveedor de facturación
+  invoiceId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    field: 'invoice_id',
+    comment: 'ID de la factura generada para esta transacción'
+  },
+  
   meta: {
     type: DataTypes.JSONB,
     allowNull: true,

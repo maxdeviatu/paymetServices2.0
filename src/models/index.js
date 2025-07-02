@@ -9,6 +9,7 @@ const Transaction = require('./transaction.model')
 const CobreCheckout = require('./cobreCheckout')
 const WebhookEvent = require('./webhookEvent.model')
 const WaitlistEntry = require('./waitlistEntry.model')
+const Invoice = require('./invoice.model')
 const { initDB, sequelize } = require('./db')
 
 // Establecer relaciones entre modelos
@@ -55,6 +56,16 @@ Transaction.belongsTo(Order, {
 Order.hasMany(Transaction, {
   foreignKey: 'orderId',
   as: 'transactions'
+})
+
+// Invoice associations
+Invoice.belongsTo(Transaction, {
+  foreignKey: 'transactionId',
+  as: 'transaction'
+})
+Transaction.hasOne(Invoice, {
+  foreignKey: 'transactionId',
+  as: 'invoice'
 })
 
 // License-Order relationship (for fulfillment tracking)
@@ -119,6 +130,7 @@ module.exports = {
   CobreCheckout,
   WebhookEvent,
   WaitlistEntry,
+  Invoice,
   DOCUMENT_TYPES,
   initDB,
   sequelize

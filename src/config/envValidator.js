@@ -125,6 +125,60 @@ class EnvironmentValidator {
         }
       },
 
+      // Variables críticas de facturación (Siigo)
+      invoicing: {
+        SIIGO_API_URL: {
+          required: true,
+          type: 'url',
+          default: 'https://api.siigo.co',
+          description: 'URL base de la API de Siigo'
+        },
+        SIIGO_USERNAME: {
+          required: true,
+          type: 'string',
+          description: 'Usuario de autenticación para Siigo'
+        },
+        SIIGO_ACCESS_KEY: {
+          required: true,
+          type: 'string',
+          minLength: 10,
+          description: 'Clave de acceso para Siigo'
+        },
+        SIIGO_PARTNER_ID: {
+          required: true,
+          type: 'string',
+          description: 'ID del partner en Siigo'
+        },
+        SIIGO_SALES_DOCUMENT_ID: {
+          required: true,
+          type: 'number',
+          description: 'ID del documento de venta en Siigo'
+        },
+        SIIGO_SELLER_ID: {
+          required: true,
+          type: 'number',
+          description: 'ID del vendedor en Siigo'
+        },
+        SIIGO_PAYMENT_TYPE_ID: {
+          required: true,
+          type: 'number',
+          description: 'ID del tipo de pago en Siigo'
+        },
+        INVOICE_PROVIDER: {
+          required: false,
+          type: 'string',
+          default: 'siigo',
+          enum: ['siigo', 'mock'],
+          description: 'Proveedor de facturación por defecto'
+        },
+        INVOICE_DELAY_BETWEEN_MS: {
+          required: false,
+          type: 'number',
+          default: '60000',
+          description: 'Delay en milisegundos entre facturas (defecto: 1 minuto)'
+        }
+      },
+
       // Variables opcionales pero recomendadas
       optional: {
         LOG_LEVEL: {

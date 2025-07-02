@@ -1,6 +1,7 @@
 const logger = require('../config/logger')
 const OrderTimeoutJob = require('./orderTimeout')
 const WaitlistProcessingJob = require('./waitlistProcessing')
+const InvoiceProcessingJob = require('./invoiceProcessing')
 
 /**
  * Simple job scheduler for background tasks
@@ -80,13 +81,23 @@ class JobScheduler {
         case 'waitlistProcessing':
           intervalMs = 30 * 1000 // 30 seconds
           break
+        case 'invoiceProcessing':
+          intervalMs = 60 * 60 * 1000 // 1 hour (check if should run)
+          break
         default:
           intervalMs = 10 * 60 * 1000 // 10 minutes default
       }
 
       const interval = setInterval(async () => {
         try {
-          await job.run()
+          // Para el job de facturas, verificar si debe ejecutarse
+          if (jobName === 'invoiceProcessing') {
+            if (job.shouldRun()) {
+              await job.run()
+            }
+          } else {
+            await job.run()
+          }
         } catch (error) {
           logger.error(`Job ${jobName} execution failed:`, error)
         }
@@ -183,5 +194,21 @@ process.on('SIGINT', async () => {
   logger.info('SIGINT received, shutting down job scheduler...')
   await jobScheduler.shutdown()
 })
+
+// Register jobs when module is loaded
+if (process.env.NODE_ENV !== 'test') {
+  // Always register order timeout job
+  jobScheduler.registerJob(OrderTimeoutJob)
+  
+  // Only register waitlist processing if enabled
+  if (process.env.ENABLE_WAITLIST_PROCESSING === 'true') {
+    jobScheduler.registerJob(WaitlistProcessingJob)
+  }
+  
+  // Only register invoice processing if enabled
+  if (process.env.ENABLE_INVOICE_PROCESSING !== 'false') {
+    jobScheduler.registerJob(InvoiceProcessingJob)
+  }
+}
 
 module.exports = jobScheduler

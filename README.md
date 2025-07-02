@@ -223,6 +223,99 @@ class NewService {
   - `EDITOR`: Crear y editar recursos
   - `SUPER_ADMIN`: Acceso completo, incluyendo eliminación
 
+## Sistema de Facturación
+
+El sistema incluye un módulo completo de facturación que se integra automáticamente con las transacciones pagadas. 
+
+### Características Principales
+
+- **Integración automática**: Genera facturas automáticamente para transacciones pagadas
+- **Múltiples proveedores**: Soporte para Siigo (producción) y Mock (desarrollo/testing)
+- **Procesamiento por lotes**: Job diario que procesa transacciones pendientes
+- **Control de ritmo**: Delay configurable entre facturas para evitar saturar APIs
+- **Gestión de estados**: Seguimiento completo del ciclo de vida de las facturas
+- **API administrativa**: Endpoints para gestión manual y consultas
+
+### Proveedores de Facturación
+
+#### Siigo (Producción)
+- Autenticación OAuth2 con renovación automática de tokens
+- Integración completa con la API de Siigo
+- Verificación de estado DIAN
+- Gestión de productos y clientes
+
+#### Mock (Desarrollo/Testing)
+- Simula el comportamiento completo de Siigo
+- Respuestas predecibles para testing
+- Sin llamadas externas reales
+
+### Modelo de Datos
+
+#### Tabla de Facturas (`invoices`)
+- `id`: ID interno de la factura
+- `provider_invoice_id`: ID de la factura en el proveedor
+- `invoice_number`: Número visible de la factura
+- `transaction_id`: Referencia a la transacción (único)
+- `provider`: Proveedor utilizado ('siigo' | 'mock')
+- `email_sent`: Estado del envío de email
+- `accepted_by_dian`: Estado de aceptación DIAN
+- `provider_product_id`: ID del producto en el proveedor
+- `provider_customer_id`: ID del cliente en el proveedor
+- `status`: Estado de la factura
+- `metadata`: Datos adicionales del proveedor
+
+#### Relación con Transacciones
+- Cada transacción puede tener máximo una factura
+- Campo `invoice_id` en la tabla de transacciones
+- Relación bidireccional para consultas optimizadas
+
+### Procesamiento Automático
+
+#### Job Diario de Facturación
+- **Horario**: 2:00 AM todos los días (configurable)
+- **Criterios**: Transacciones con status 'PAID' sin factura
+- **Optimización**: Solo procesa desde la última transacción facturada
+- **Delay**: 1 minuto entre facturas (configurable)
+- **Logging**: Registro completo de operaciones y errores
+
+#### Algoritmo de Procesamiento
+1. Buscar transacciones PAID sin `invoice_id`
+2. Para cada transacción:
+   - Validar que tenga orden y producto asociados
+   - Buscar producto en el proveedor de facturación
+   - Crear factura en el proveedor
+   - Guardar registro de factura en BD
+   - Actualizar transacción con `invoice_id`
+   - Esperar delay configurado
+3. Registrar estadísticas y errores
+
+### Variables de Entorno
+
+```bash
+# Configuración de Siigo
+SIIGO_API_URL=https://api.siigo.co
+SIIGO_USERNAME=tu_usuario
+SIIGO_ACCESS_KEY=tu_access_key
+SIIGO_PARTNER_ID=tu_partner_id
+SIIGO_SALES_DOCUMENT_ID=1
+SIIGO_SELLER_ID=1
+SIIGO_PAYMENT_TYPE_ID=1
+
+# Configuración del sistema
+INVOICE_PROVIDER=siigo              # 'siigo' | 'mock'
+INVOICE_DELAY_BETWEEN_MS=60000      # Delay entre facturas (ms)
+```
+
+### Scripts de Configuración
+
+```bash
+# Crear tabla de facturas
+npm run create-invoices-table
+
+# Validar configuración
+npm run env:validate
+```
+
 ## Endpoints API
 
 ### Productos
@@ -260,6 +353,25 @@ class NewService {
 | PUT | `/api/admins/:id` | Editar administrador | SUPER_ADMIN |
 | DELETE | `/api/admins/:id` | Eliminar administrador | SUPER_ADMIN |
 | POST | `/api/admins/:id/reset-password` | Restablecer contraseña | SUPER_ADMIN |
+
+### Facturas
+
+| Método | Ruta | Acción | Rol |
+|--------|------|--------|-----|
+| GET | `/api/invoices` | Listar facturas con paginación | READ_ONLY |
+| GET | `/api/invoices/stats` | Estadísticas de facturación | READ_ONLY |
+| GET | `/api/invoices/:id` | Ver factura específica | READ_ONLY |
+| POST | `/api/invoices/execute` | Ejecutar facturación masiva | EDITOR |
+| PUT | `/api/invoices/:id/status` | Actualizar estado de factura | EDITOR |
+
+### Jobs Administrativos
+
+| Método | Ruta | Acción | Rol |
+|--------|------|--------|-----|
+| GET | `/api/admin/jobs/status` | Estado de todos los jobs | SUPER_ADMIN |
+| POST | `/api/admin/jobs/invoice/run` | Ejecutar job de facturas | SUPER_ADMIN |
+| POST | `/api/admin/jobs/:jobName/start` | Iniciar job específico | SUPER_ADMIN |
+| POST | `/api/admin/jobs/:jobName/stop` | Detener job específico | SUPER_ADMIN |
 
 ## Requisitos Previos
 
