@@ -3,12 +3,23 @@ const slowDown = require('express-slow-down')
 const logger = require('../config/logger')
 
 /**
+ * Custom key generator that handles trusted proxies safely
+ * Uses X-Forwarded-For only for specific trusted proxy scenarios
+ */
+const generateKey = (req) => {
+  // In production with reverse proxy, use the forwarded IP
+  // In development or direct access, use the connection IP
+  return req.ip || req.connection.remoteAddress || 'unknown'
+}
+
+/**
  * Rate limiter for order creation - Optimizado para alto volumen
  * Prevents abuse of the public order endpoint
  */
 const orderCreationLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: process.env.ORDER_RATE_LIMIT_MAX ? parseInt(process.env.ORDER_RATE_LIMIT_MAX) : 100, // Aumentado a 100 órdenes por IP
+  keyGenerator: generateKey,
   message: {
     success: false,
     message: 'Demasiadas órdenes creadas desde esta IP. Intenta nuevamente en 15 minutos.',
@@ -51,6 +62,7 @@ const orderCreationLimiter = rateLimit({
 const paymentLimiter = rateLimit({
   windowMs: 5 * 60 * 1000, // 5 minutes
   max: 5, // limit each IP to 5 payment requests per windowMs
+  keyGenerator: generateKey,
   message: {
     success: false,
     message: 'Demasiados intentos de pago desde esta IP. Intenta nuevamente en 5 minutos.',
@@ -82,6 +94,7 @@ const paymentLimiter = rateLimit({
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: process.env.GENERAL_RATE_LIMIT_MAX ? parseInt(process.env.GENERAL_RATE_LIMIT_MAX) : 500, // Aumentado a 500 requests por IP
+  keyGenerator: generateKey,
   message: {
     success: false,
     message: 'Demasiadas solicitudes desde esta IP. Intenta nuevamente más tarde.',
@@ -143,6 +156,7 @@ const orderLookupSlowDown = slowDown({
 const webhookLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
   max: process.env.WEBHOOK_RATE_LIMIT_MAX ? parseInt(process.env.WEBHOOK_RATE_LIMIT_MAX) : 1000, // Aumentado a 1000 webhooks por minuto
+  keyGenerator: generateKey,
   message: {
     success: false,
     message: 'Webhook rate limit exceeded',

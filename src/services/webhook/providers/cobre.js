@@ -10,6 +10,19 @@ class CobreAdapter {
   constructor () {
     this.secret = config.cobre.webhook.secret
     this.provider = 'cobre'
+    
+    // Log webhook secret configuration status for debugging
+    if (!this.secret) {
+      logger.warn('Cobre webhook: No webhook secret configured', {
+        env: process.env.NODE_ENV,
+        hasCobreWebhookSecret: !!process.env.COBRE_WEBHOOK_SECRET
+      })
+    } else {
+      logger.debug('Cobre webhook: Secret configured successfully', {
+        secretLength: this.secret.length,
+        secretPreview: this.secret.substring(0, 8) + '...'
+      })
+    }
   }
 
   /**
@@ -19,8 +32,9 @@ class CobreAdapter {
    */
   verifySignature (req) {
     try {
-      const timestamp = req.headers.event_timestamp
-      const signature = req.headers.event_signature
+      // Cobre sends headers with hyphens, not underscores
+      const timestamp = req.headers['event-timestamp'] || req.headers.event_timestamp
+      const signature = req.headers['event-signature'] || req.headers.event_signature
 
       if (!timestamp || !signature) {
         logger.warn('Cobre webhook: Missing timestamp or signature headers', {
