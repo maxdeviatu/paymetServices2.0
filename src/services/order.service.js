@@ -329,11 +329,98 @@ async function cancelOrder (orderId, reason = 'MANUAL') {
   }
 }
 
+/**
+ * Get all orders with filters and pagination (Admin only)
+ */
+async function getAllOrders (options = {}) {
+  try {
+    const {
+      page = 1,
+      limit = 20,
+      status,
+      customerId,
+      productRef,
+      startDate,
+      endDate
+    } = options
+
+    logger.logBusiness('order:getAll', {
+      page,
+      limit,
+      status,
+      customerId,
+      productRef,
+      startDate,
+      endDate
+    })
+
+    const offset = (page - 1) * limit
+    const where = {}
+
+    // Apply filters
+    if (status) {
+      where.status = status
+    }
+    if (customerId) {
+      where.customerId = customerId
+    }
+    if (productRef) {
+      where.productRef = productRef
+    }
+    if (startDate || endDate) {
+      where.createdAt = {}
+      if (startDate) {
+        where.createdAt[Op.gte] = new Date(startDate)
+      }
+      if (endDate) {
+        where.createdAt[Op.lte] = new Date(endDate)
+      }
+    }
+
+    const { count, rows } = await Order.findAndCountAll({
+      where,
+      include: [
+        { association: 'product' },
+        { association: 'transactions' },
+        { association: 'customer' }
+      ],
+      offset,
+      limit,
+      order: [['createdAt', 'DESC']]
+    })
+
+    logger.logBusiness('order:getAll.success', {
+      total: count,
+      page,
+      limit,
+      returned: rows.length,
+      filters: { status, customerId, productRef, startDate, endDate }
+    })
+
+    return {
+      orders: rows,
+      pagination: {
+        total: count,
+        page,
+        limit,
+        pages: Math.ceil(count / limit)
+      }
+    }
+  } catch (error) {
+    logger.logError(error, {
+      operation: 'getAllOrders',
+      options
+    })
+    throw error
+  }
+}
+
 module.exports = {
   createOrder,
   getOrderById,
   updateOrderStatus,
   getOrdersByCustomer,
   cancelOrder,
-  getOrCreateCustomer
+  getOrCreateCustomer,
+  getAllOrders
 }

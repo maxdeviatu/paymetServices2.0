@@ -837,12 +837,70 @@ class TransactionHandler {
     })
 
     if (license) {
-      await emailService.sendLicenseEmail({
-        customer: order.customer,
-        product: order.product,
-        license,
-        order
-      })
+      try {
+        // Enviar email
+        const emailResult = await emailService.sendLicenseEmail({
+          customer: order.customer,
+          product: order.product,
+          license,
+          order
+        })
+
+        // Si el email se envió exitosamente, actualizar shippingInfo
+        if (emailResult && emailResult.success) {
+          const currentShippingInfo = order.shippingInfo || {}
+          const updatedShippingInfo = {
+            ...currentShippingInfo,
+            email: {
+              sent: true,
+              sentAt: new Date().toISOString(),
+              messageId: emailResult.messageId,
+              recipient: order.customer.email,
+              type: 'license_delivery'
+            }
+          }
+
+          // Actualizar la orden con la información del email enviado
+          await order.update({
+            shippingInfo: updatedShippingInfo
+          })
+
+          logger.info('TransactionHandler: Email sent and shippingInfo updated', {
+            orderId: order.id,
+            customerEmail: order.customer.email,
+            messageId: emailResult.messageId,
+            shippingInfoUpdated: true
+          })
+        }
+
+        return emailResult
+      } catch (emailError) {
+        logger.error('TransactionHandler: Error sending license email', {
+          error: emailError.message,
+          orderId: order.id,
+          customerEmail: order.customer.email
+        })
+
+        // Registrar el intento fallido en shippingInfo
+        const currentShippingInfo = order.shippingInfo || {}
+        const updatedShippingInfo = {
+          ...currentShippingInfo,
+          email: {
+            sent: false,
+            attemptedAt: new Date().toISOString(),
+            error: emailError.message,
+            recipient: order.customer.email,
+            type: 'license_delivery'
+          }
+        }
+
+        // Actualizar la orden con la información del intento fallido
+        await order.update({
+          shippingInfo: updatedShippingInfo
+        })
+
+        throw emailError
+      }
     }
   }
 
@@ -856,12 +914,72 @@ class TransactionHandler {
     const emailService = require('../../email')
 
     if (waitlistEntry) {
-      await emailService.sendWaitlistNotification({
-        customer: order.customer,
-        product: order.product,
-        order,
-        waitlistEntry
-      })
+      try {
+        // Enviar email
+        const emailResult = await emailService.sendWaitlistNotification({
+          customer: order.customer,
+          product: order.product,
+          order,
+          waitlistEntry
+        })
+
+        // Si el email se envió exitosamente, actualizar shippingInfo
+        if (emailResult && emailResult.success) {
+          const currentShippingInfo = order.shippingInfo || {}
+          const updatedShippingInfo = {
+            ...currentShippingInfo,
+            email: {
+              sent: true,
+              sentAt: new Date().toISOString(),
+              messageId: emailResult.messageId,
+              recipient: order.customer.email,
+              type: 'waitlist_notification'
+            }
+          }
+
+          // Actualizar la orden con la información del email enviado
+          await order.update({
+            shippingInfo: updatedShippingInfo
+          })
+
+          logger.info('TransactionHandler: Waitlist email sent and shippingInfo updated', {
+            orderId: order.id,
+            customerEmail: order.customer.email,
+            messageId: emailResult.messageId,
+            waitlistEntryId: waitlistEntry.id,
+            shippingInfoUpdated: true
+          })
+        }
+
+        return emailResult
+      } catch (emailError) {
+        logger.error('TransactionHandler: Error sending waitlist notification', {
+          error: emailError.message,
+          orderId: order.id,
+          customerEmail: order.customer.email,
+          waitlistEntryId: waitlistEntry.id
+        })
+
+        // Registrar el intento fallido en shippingInfo
+        const currentShippingInfo = order.shippingInfo || {}
+        const updatedShippingInfo = {
+          ...currentShippingInfo,
+          email: {
+            sent: false,
+            attemptedAt: new Date().toISOString(),
+            error: emailError.message,
+            recipient: order.customer.email,
+            type: 'waitlist_notification'
+          }
+        }
+
+        // Actualizar la orden con la información del intento fallido
+        await order.update({
+          shippingInfo: updatedShippingInfo
+        })
+
+        throw emailError
+      }
     }
   }
 }

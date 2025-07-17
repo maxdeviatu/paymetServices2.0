@@ -14,6 +14,7 @@ const jobsRoutes = require('./admin/jobs.routes')
 const waitlistRoutes = require('./waitlist.routes')
 const emailQueueRoutes = require('./emailQueue.routes')
 const invoicesRoutes = require('./invoices.routes')
+const transactionStatusRoutes = require('./transactionStatus.routes')
 
 // Montar rutas
 router.use('/products', productsRoutes)
@@ -28,5 +29,6 @@ router.use('/admin/jobs', jobsRoutes)
 router.use('/waitlist', waitlistRoutes)
 router.use('/email-queue', emailQueueRoutes)
 router.use('/invoices', invoicesRoutes)
+router.use('/transaction-status', transactionStatusRoutes)
 
 module.exports = router

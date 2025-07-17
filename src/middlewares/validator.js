@@ -1,4 +1,4 @@
-const { validationResult } = require('express-validator')
+const { validationResult, param, body } = require('express-validator')
 
 /**
  * Middleware para validar resultados de express-validator
@@ -19,6 +19,38 @@ const validateRequest = (req, res, next) => {
   next()
 }
 
-module.exports = {
+/**
+ * Validaciones para transacciones
+ */
+const validateTransactionLookup = [
+  param('transactionId')
+    .isInt({ min: 1 })
+    .withMessage('transactionId debe ser un número entero positivo'),
   validateRequest
+]
+
+const validateMultipleTransactions = [
+  body('transactionIds')
+    .optional()
+    .isArray()
+    .withMessage('transactionIds debe ser un array'),
+  body('transactionIds.*')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('Cada transactionId debe ser un número entero positivo'),
+  body('status')
+    .optional()
+    .isIn(['PENDING', 'PAID', 'FAILED', 'CANCELLED', 'EXPIRED'])
+    .withMessage('status debe ser uno de: PENDING, PAID, FAILED, CANCELLED, EXPIRED'),
+  body('limit')
+    .optional()
+    .isInt({ min: 1, max: 100 })
+    .withMessage('limit debe ser entre 1 y 100'),
+  validateRequest
+]
+
+module.exports = {
+  validateRequest,
+  validateTransactionLookup,
+  validateMultipleTransactions
 }

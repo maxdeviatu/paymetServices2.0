@@ -3,8 +3,43 @@ const accountsService = require('./accounts')
 const axios = require('axios')
 const config = require('../../../../config')
 const logger = require('../../../../config/logger')
+const NodeCache = require('node-cache')
 
 class CobreProvider {
+  constructor () {
+    // Cache para estados de checkout (1 minuto TTL)
+    this.statusCache = new NodeCache({ stdTTL: 60 })
+    // Rate limiting: máximo 10 llamadas por minuto
+    this.rateLimiter = {
+      requests: new Map(),
+      maxRequests: 10,
+      windowMs: 60000 // 1 minuto
+    }
+  }
+
+  /**
+   * Verifica si se puede hacer una llamada a la API (rate limiting)
+   * @param {string} key - Clave para el rate limiting
+   * @returns {boolean} - true si se puede hacer la llamada
+   */
+  canMakeRequest (key = 'default') {
+    const now = Date.now()
+    const requests = this.rateLimiter.requests.get(key) || []
+
+    // Filtrar requests dentro de la ventana de tiempo
+    const recentRequests = requests.filter(time => now - time < this.rateLimiter.windowMs)
+
+    if (recentRequests.length >= this.rateLimiter.maxRequests) {
+      return false
+    }
+
+    // Agregar esta request
+    recentRequests.push(now)
+    this.rateLimiter.requests.set(key, recentRequests)
+
+    return true
+  }
+
   /**
    * Sanitize text for Cobre API - remove special characters that cause CHK004 error
    */
@@ -198,6 +233,161 @@ class CobreProvider {
   }
 
   /**
+   * Retrieve checkout status from Cobre API with caching and rate limiting
+   * @param {string} checkoutId - The checkout ID from Cobre (chk_xxx)
+   * @param {boolean} useCache - Whether to use cache (default: true)
+   * @returns {Promise<Object>} - Checkout status and details
+   */
+  async getCheckoutStatus (checkoutId, useCache = true) {
+    try {
+      // Verificar cache primero
+      const cacheKey = `checkout:${checkoutId}`
+      if (useCache) {
+        const cached = this.statusCache.get(cacheKey)
+        if (cached) {
+          logger.debug('📦 Estado del checkout obtenido desde cache:', { checkoutId })
+          return cached
+        }
+      }
+
+      // Verificar rate limiting
+      if (!this.canMakeRequest(checkoutId)) {
+        const error = new Error('Rate limit exceeded. Máximo 10 llamadas por minuto por checkout.')
+        error.code = 'RATE_LIMIT_EXCEEDED'
+        throw error
+      }
+
+      logger.info('🔍 Consultando estado del checkout en Cobre:', { checkoutId })
+
+      // Get access token
+      const token = await auth.getAccessToken()
+
+      // Make GET request to Cobre API
+      const response = await axios.get(`${config.cobre.baseUrl}/v1/checkouts/${checkoutId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      const checkout = response.data
+
+      logger.info('✅ Estado del checkout obtenido:', {
+        checkoutId: checkout.id,
+        status: checkout.status,
+        amount: checkout.amount,
+        externalId: checkout.external_id,
+        createdAt: checkout.created_at,
+        validUntil: checkout.valid_until
+      })
+
+      const result = {
+        checkoutId: checkout.id,
+        status: checkout.status,
+        amount: checkout.amount,
+        currency: checkout.currency || 'USD',
+        externalId: checkout.external_id,
+        createdAt: checkout.created_at,
+        validUntil: checkout.valid_until,
+        paymentMethod: checkout.payment_method,
+        metadata: checkout.metadata,
+        rawData: checkout
+      }
+
+      // Guardar en cache
+      if (useCache) {
+        this.statusCache.set(cacheKey, result)
+      }
+
+      return result
+    } catch (error) {
+      if (error.code === 'RATE_LIMIT_EXCEEDED') {
+        logger.warn('⚠️ Rate limit excedido para checkout:', { checkoutId })
+        throw error
+      }
+
+      logger.error('❌ Error consultando estado del checkout:', {
+        error: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+        checkoutId
+      })
+      throw error
+    }
+  }
+
+  /**
+   * Retrieve money movement status from Cobre API
+   * @param {string} moneyMovementId - The money movement ID from Cobre (mm_xxx)
+   * @param {Object} options - Options for the request
+   * @param {boolean} options.nested - Include nested objects (default: false)
+   * @param {boolean} options.sensitiveData - Include sensitive data (default: false)
+   * @returns {Promise<Object>} - Money movement status and details
+   */
+  async getMoneyMovementStatus (moneyMovementId, options = {}) {
+    try {
+      const { nested = false, sensitiveData = false } = options
+      
+      logger.info('🔍 Consultando estado del money movement en Cobre:', { 
+        moneyMovementId,
+        nested,
+        sensitiveData 
+      })
+
+      // Get access token
+      const accessToken = await auth.getAccessToken()
+
+      // Build query parameters
+      const queryParams = new URLSearchParams()
+      if (nested) queryParams.append('nested', 'true')
+      if (sensitiveData) queryParams.append('sensitive_data', 'true')
+
+      const url = `${config.cobre.baseUrl}/v1/money_movements/${moneyMovementId}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
+
+      // Make API call to get money movement status
+      const response = await axios.get(url, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      const movementData = response.data
+      logger.info('✅ Money movement consultado exitosamente:', {
+        moneyMovementId,
+        status: movementData.status?.state,
+        amount: movementData.amount,
+        externalId: movementData.external_id
+      })
+
+      return {
+        moneyMovementId: movementData.id,
+        externalId: movementData.external_id,
+        status: movementData.status?.state,
+        statusCode: movementData.status?.code,
+        statusDescription: movementData.status?.description,
+        amount: movementData.amount,
+        currency: movementData.currency,
+        type: movementData.type,
+        geography: movementData.geography,
+        description: movementData.description,
+        trackingKey: movementData.tracking_key,
+        reference: movementData.reference,
+        cepUrl: movementData.cep_url,
+        createdAt: movementData.created_at,
+        updatedAt: movementData.updated_at,
+        source: movementData.source,
+        destination: movementData.destination,
+        metadata: movementData.metadata,
+        rawData: movementData
+      }
+    } catch (error) {
+      logger.error('❌ Error en getMoneyMovementStatus:', error.message)
+      throw error
+    }
+  }
+
+  /**
    * Map Cobre status to internal status
    */
   mapCobreStatus (cobreStatus) {
@@ -213,6 +403,24 @@ class CobreProvider {
     }
 
     return statusMap[cobreStatus?.toLowerCase()] || 'FAILED'
+  }
+
+  /**
+   * Map Cobre money movement status to internal status
+   */
+  mapMoneyMovementStatus (movementStatus) {
+    const statusMap = {
+      completed: 'PAID',
+      processing: 'PENDING',
+      initiated: 'PENDING',
+      under_review: 'PENDING',
+      canceled: 'FAILED',
+      returned: 'FAILED',
+      rejected: 'FAILED',
+      failed: 'FAILED'
+    }
+
+    return statusMap[movementStatus?.toLowerCase()] || 'FAILED'
   }
 }
 
