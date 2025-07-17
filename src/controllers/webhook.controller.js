@@ -22,12 +22,22 @@ class WebhookController {
         })
       }
 
+      // Preservar el raw body para la verificación de firma
+      if (Buffer.isBuffer(req.body)) {
+        req.rawBody = req.body
+        logger.debug('WebhookController: Preserved raw body', {
+          provider,
+          rawBodyLength: req.rawBody.length
+        })
+      }
+
       logger.info('WebhookController: Received webhook', {
         provider,
         ip: req.ip,
         userAgent: req.get('User-Agent'),
         contentType: req.get('Content-Type'),
-        bodySize: req.body ? req.body.length : 0
+        bodySize: req.body ? req.body.length : 0,
+        hasRawBody: !!req.rawBody
       })
 
       // Procesar webhook con el servicio

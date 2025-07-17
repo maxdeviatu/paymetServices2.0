@@ -41,37 +41,85 @@ class CobreAdapter {
         return false
       }
 
-      // Cobre sends headers with hyphens, not underscores
-      const timestamp = req.headers['event-timestamp'] || req.headers.event_timestamp
-      const signature = req.headers['event-signature'] || req.headers.event_signature
+      // Buscar headers con búsqueda exhaustiva y case-insensitive
+      const allHeaders = Object.keys(req.headers)
+      
+      // Buscar timestamp con múltiples variaciones
+      const timestampKeys = allHeaders.filter(key => {
+        const lowerKey = key.toLowerCase()
+        return lowerKey.includes('timestamp') || lowerKey.includes('time')
+      })
+      
+      // Buscar signature con múltiples variaciones
+      const signatureKeys = allHeaders.filter(key => {
+        const lowerKey = key.toLowerCase()
+        return lowerKey.includes('signature') || lowerKey.includes('sign')
+      })
+
+      let timestamp = null
+      let signature = null
+
+      // Obtener timestamp con prioridad
+      for (const key of timestampKeys) {
+        if (req.headers[key]) {
+          timestamp = req.headers[key]
+          logger.debug('Cobre webhook: Found timestamp header', { key, timestamp })
+          break
+        }
+      }
+
+      // Obtener signature con prioridad  
+      for (const key of signatureKeys) {
+        if (req.headers[key]) {
+          signature = req.headers[key]
+          logger.debug('Cobre webhook: Found signature header', { key, signaturePreview: signature.substring(0, 16) + '...' })
+          break
+        }
+      }
 
       if (!timestamp || !signature) {
         logger.warn('Cobre webhook: Missing timestamp or signature headers', {
           timestamp: !!timestamp,
           signature: !!signature,
-          headers: Object.keys(req.headers),
-          allHeaders: process.env.NODE_ENV === 'development' ? req.headers : {}
+          timestampKeys,
+          signatureKeys,
+          allHeaders: process.env.NODE_ENV === 'development' ? req.headers : 'hidden_in_production'
         })
         return false
       }
 
-      // Concatenar timestamp + "." + body (sin espacios ni saltos de línea)
+      // Preservar el raw body original para la verificación
       let bodyString
-      if (Buffer.isBuffer(req.body)) {
+      if (req.rawBody) {
+        // Si tenemos el raw body preservado, usarlo
+        bodyString = Buffer.isBuffer(req.rawBody) ? req.rawBody.toString('utf8') : req.rawBody
+        logger.debug('Cobre webhook: Using preserved raw body', { bodyLength: bodyString.length })
+      } else if (Buffer.isBuffer(req.body)) {
         bodyString = req.body.toString('utf8')
+        logger.debug('Cobre webhook: Using Buffer body', { bodyLength: bodyString.length })
       } else if (typeof req.body === 'string') {
         bodyString = req.body
+        logger.debug('Cobre webhook: Using string body', { bodyLength: bodyString.length })
       } else if (typeof req.body === 'object') {
         bodyString = JSON.stringify(req.body)
+        logger.debug('Cobre webhook: Using stringified object body', { bodyLength: bodyString.length })
       } else {
         logger.error('Cobre webhook: Unexpected body type', {
           bodyType: typeof req.body,
-          body: req.body
+          hasRawBody: !!req.rawBody
         })
         return false
       }
 
+      // Construir el payload para verificación: timestamp.body
       const data = `${timestamp}.${bodyString}`
+      
+      logger.debug('Cobre webhook: Signature verification data', {
+        timestamp,
+        bodyLength: bodyString.length,
+        dataLength: data.length,
+        dataPreview: data.substring(0, 100) + '...'
+      })
 
       // Calcular HMAC-SHA256
       const expectedSignature = crypto
@@ -82,9 +130,13 @@ class CobreAdapter {
       // Comparación segura contra timing attacks
       let isValid = false
       try {
+        // Normalizar signatures (remove potential prefixes)
+        const cleanSignature = signature.replace(/^sha256=/, '').toLowerCase()
+        const cleanExpected = expectedSignature.toLowerCase()
+
         isValid = crypto.timingSafeEqual(
-          Buffer.from(expectedSignature, 'hex'),
-          Buffer.from(signature, 'hex')
+          Buffer.from(cleanExpected, 'hex'),
+          Buffer.from(cleanSignature, 'hex')
         )
       } catch (bufferError) {
         logger.error('Cobre webhook: Error in signature comparison', {
@@ -100,16 +152,16 @@ class CobreAdapter {
       if (!isValid) {
         logger.warn('Cobre webhook: Invalid signature', {
           expected: expectedSignature,
-          received: signature,
-          data: data.substring(0, 100) + '...',
+          received: signature.replace(/^sha256=/, ''),
           timestamp,
           bodyLength: bodyString.length,
           bodyType: typeof req.body,
+          dataPreview: data.substring(0, 200) + '...',
           secretLength: this.secret.length,
           secretPreview: this.secret.substring(0, 8) + '...'
         })
       } else {
-        logger.debug('Cobre webhook: Signature verified successfully', {
+        logger.info('Cobre webhook: Signature verified successfully', {
           timestamp,
           bodyLength: bodyString.length,
           signatureLength: signature.length
