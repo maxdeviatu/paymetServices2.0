@@ -44,56 +44,75 @@ class MockAdapter {
   /**
    * Parsea el webhook mock y lo normaliza
    * @param {express.Request} req - Request de Express
-   * @returns {WebhookEvent} - Evento normalizado
+   * @returns {WebhookEvent[]} - Array de eventos normalizados
    */
   parseWebhook (req) {
     try {
       const body = JSON.parse(req.body.toString())
 
-      logger.info('Mock webhook: Parsing event', {
-        reference: body.reference,
-        status: body.status,
-        amount: body.amount
+      // Detectar si el webhook contiene múltiples eventos
+      const events = this._extractEvents(body)
+
+      logger.info('Mock webhook: Processing events', {
+        totalEvents: events.length
       })
 
-      // Extraer datos del webhook mock
-      const externalRef = body.reference || body.gatewayRef
-      const status = body.status || 'PAID' // Default a success para testing
-      const amount = body.amount || 10000 // Default amount para testing
-      const currency = body.currency || 'USD'
-      const eventType = body.eventType || 'payment'
+      const webhookEvents = events.map((eventBody, index) => {
+        logger.info('Mock webhook: Parsing event', {
+          eventIndex: index,
+          reference: eventBody.reference,
+          status: eventBody.status,
+          amount: eventBody.amount
+        })
 
-      if (!externalRef) {
-        throw new Error('Missing external reference in mock webhook')
-      }
+        // Extraer datos del webhook mock
+        const externalRef = eventBody.reference || eventBody.gatewayRef
+        const status = eventBody.status || 'PAID' // Default a success para testing
+        const amount = eventBody.amount || 10000 // Default amount para testing
+        const currency = eventBody.currency || 'USD'
+        const eventType = eventBody.eventType || 'payment'
 
-      if (!amount || amount <= 0) {
-        throw new Error('Invalid or missing amount in mock webhook')
-      }
+        if (!externalRef) {
+          throw new Error(`Missing external reference in mock webhook event ${index}`)
+        }
 
-      const webhookEvent = {
-        provider: this.provider,
-        type: eventType,
-        externalRef,
-        eventId: body.eventId || `mock_${Date.now()}`,
-        status: this.mapStatus(status),
-        amount: Math.round(amount),
-        currency: currency.toUpperCase(),
-        rawHeaders: req.headers,
-        rawBody: req.body,
-        payload: body
-      }
+        if (!amount || amount <= 0) {
+          throw new Error(`Invalid or missing amount in mock webhook event ${index}`)
+        }
 
-      logger.info('Mock webhook: Successfully parsed', {
-        eventId: webhookEvent.eventId,
-        externalRef: webhookEvent.externalRef,
-        type: webhookEvent.type,
-        status: webhookEvent.status,
-        amount: webhookEvent.amount,
-        currency: webhookEvent.currency
+        const webhookEvent = {
+          provider: this.provider,
+          type: eventType,
+          externalRef,
+          eventId: eventBody.eventId || `mock_${Date.now()}_${index}`,
+          status: this.mapStatus(status),
+          amount: Math.round(amount),
+          currency: currency.toUpperCase(),
+          rawHeaders: req.headers,
+          rawBody: req.body,
+          payload: eventBody,
+          eventIndex: index
+        }
+
+        logger.info('Mock webhook: Successfully parsed event', {
+          eventIndex: index,
+          eventId: webhookEvent.eventId,
+          externalRef: webhookEvent.externalRef,
+          type: webhookEvent.type,
+          status: webhookEvent.status,
+          amount: webhookEvent.amount,
+          currency: webhookEvent.currency
+        })
+
+        return webhookEvent
       })
 
-      return webhookEvent
+      logger.info('Mock webhook: All events parsed successfully', {
+        totalEvents: webhookEvents.length,
+        eventIds: webhookEvents.map(e => e.eventId)
+      })
+
+      return webhookEvents
     } catch (error) {
       logger.error('Mock webhook: Error parsing webhook', {
         error: error.message,
@@ -101,6 +120,50 @@ class MockAdapter {
       })
       throw new Error(`Failed to parse Mock webhook: ${error.message}`)
     }
+  }
+
+  /**
+   * Extrae eventos del body del webhook
+   * @param {Object} body - Cuerpo del webhook
+   * @returns {Array} - Array de eventos
+   * @private
+   */
+  _extractEvents (body) {
+    // Si el body es un array, procesar cada elemento como un evento
+    if (Array.isArray(body)) {
+      logger.info('Mock webhook: Detected array of events', {
+        eventCount: body.length
+      })
+      return body
+    }
+
+    // Si el body tiene una propiedad 'events' que es un array
+    if (body.events && Array.isArray(body.events)) {
+      logger.info('Mock webhook: Detected events array in body', {
+        eventCount: body.events.length
+      })
+      return body.events
+    }
+
+    // Si el body tiene una propiedad 'data' que es un array
+    if (body.data && Array.isArray(body.data)) {
+      logger.info('Mock webhook: Detected data array in body', {
+        eventCount: body.data.length
+      })
+      return body.data
+    }
+
+    // Si el body tiene una propiedad 'webhooks' que es un array
+    if (body.webhooks && Array.isArray(body.webhooks)) {
+      logger.info('Mock webhook: Detected webhooks array in body', {
+        eventCount: body.webhooks.length
+      })
+      return body.webhooks
+    }
+
+    // Caso por defecto: tratar el body como un solo evento
+    logger.info('Mock webhook: Treating body as single event')
+    return [body]
   }
 
   /**

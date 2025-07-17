@@ -56,107 +56,145 @@ class WebhookService {
         throw new Error(`Invalid signature for provider: ${providerName}`)
       }
 
-      // 3. Parsear y normalizar el webhook
-      const webhookEvent = adapter.parseWebhook(req)
+      // 3. Parsear y normalizar el webhook (ahora puede retornar múltiples eventos)
+      const webhookEvents = adapter.parseWebhook(req)
 
-      // 4. Verificar idempotencia antes de procesar
-      const existingEvent = await this.checkIdempotency(webhookEvent)
-      if (existingEvent) {
-        logger.info('WebhookService: Event already processed (idempotency check)', {
-          eventId: webhookEvent.eventId,
-          externalRef: webhookEvent.externalRef,
-          provider: webhookEvent.provider
-        })
-        return {
-          status: 'duplicate',
-          reason: 'already_processed',
-          eventId: existingEvent.id
+      // 4. Procesar cada evento individualmente
+      const results = []
+      const processedEvents = []
+      const failedEvents = []
+
+      logger.info('WebhookService: Processing multiple events', {
+        totalEvents: webhookEvents.length
+      })
+
+      for (let i = 0; i < webhookEvents.length; i++) {
+        const webhookEvent = webhookEvents[i]
+        
+        try {
+          logger.info('WebhookService: Processing event', {
+            eventIndex: i,
+            eventId: webhookEvent.eventId,
+            externalRef: webhookEvent.externalRef,
+            type: webhookEvent.type
+          })
+
+          // 4.1 Verificar idempotencia antes de procesar
+          const existingEvent = await this.checkIdempotency(webhookEvent)
+          if (existingEvent) {
+            logger.info('WebhookService: Event already processed (idempotency check)', {
+              eventIndex: i,
+              eventId: webhookEvent.eventId,
+              externalRef: webhookEvent.externalRef,
+              provider: webhookEvent.provider
+            })
+            
+            const duplicateResult = {
+              status: 'duplicate',
+              reason: 'already_processed',
+              eventId: existingEvent.id,
+              eventIndex: i
+            }
+            results.push(duplicateResult)
+            continue
+          }
+
+          // 4.2 Registrar el evento en la base de datos
+          const webhookEventRecord = await this.registerWebhookEvent(webhookEvent)
+
+          // 4.3 Procesar el evento con el handler correspondiente
+          const handler = this.getEventHandler(webhookEvent.type)
+          if (!handler) {
+            throw new Error(`No handler found for event type: ${webhookEvent.type}`)
+          }
+
+          const result = await handler.handle(webhookEvent)
+
+          // 4.4 Actualizar el registro del evento con el resultado
+          await this.updateWebhookEvent(webhookEventRecord.id, {
+            processedAt: new Date(),
+            status: result.success ? 'PROCESSED' : 'FAILED',
+            errorMessage: result.success ? null : result.reason
+          })
+
+          const eventResult = {
+            eventIndex: i,
+            eventId: webhookEvent.eventId,
+            externalRef: webhookEvent.externalRef,
+            status: result.success ? 'processed' : 'failed',
+            ...result
+          }
+
+          results.push(eventResult)
+          processedEvents.push(eventResult)
+
+          logger.info('WebhookService: Successfully processed event', {
+            eventIndex: i,
+            eventId: webhookEvent.eventId,
+            externalRef: webhookEvent.externalRef,
+            type: webhookEvent.type,
+            status: webhookEvent.status,
+            result: result.success
+          })
+
+        } catch (error) {
+          logger.error('WebhookService: Error processing event', {
+            eventIndex: i,
+            eventId: webhookEvent?.eventId,
+            externalRef: webhookEvent?.externalRef,
+            error: error.message,
+            stack: error.stack
+          })
+
+          const errorResult = {
+            eventIndex: i,
+            eventId: webhookEvent?.eventId,
+            externalRef: webhookEvent?.externalRef,
+            status: 'failed',
+            error: error.message
+          }
+
+          results.push(errorResult)
+          failedEvents.push(errorResult)
         }
       }
 
-      // 5. Registrar el evento en la base de datos
-      const webhookEventRecord = await this.registerWebhookEvent(webhookEvent)
-
-      // 6. Procesar el evento con el handler correspondiente
-      const handler = this.getEventHandler(webhookEvent.type)
-      if (!handler) {
-        throw new Error(`No handler found for event type: ${webhookEvent.type}`)
-      }
-
-      const result = await handler.handle(webhookEvent)
-
-      // 7. Actualizar el registro del evento con el resultado
-      await this.updateWebhookEvent(webhookEventRecord.id, {
-        processedAt: new Date(),
-        status: result.success ? 'PROCESSED' : 'FAILED',
-        errorMessage: result.success ? null : result.reason
-      })
-
       const processingTime = Date.now() - startTime
 
-      logger.info('WebhookService: Successfully processed webhook', {
+      // 5. Generar resumen del procesamiento
+      const summary = {
+        totalEvents: webhookEvents.length,
+        processedEvents: processedEvents.length,
+        failedEvents: failedEvents.length,
+        duplicateEvents: results.filter(r => r.status === 'duplicate').length,
+        processingTime: `${processingTime}ms`
+      }
+
+      logger.info('WebhookService: Completed processing all events', {
         provider: providerName,
-        eventId: webhookEvent.eventId,
-        externalRef: webhookEvent.externalRef,
-        type: webhookEvent.type,
-        status: webhookEvent.status,
-        processingTime: `${processingTime}ms`,
-        result
+        ...summary,
+        results: results.map(r => ({
+          eventIndex: r.eventIndex,
+          eventId: r.eventId,
+          status: r.status
+        }))
       })
 
       return {
         status: 'processed',
-        eventId: webhookEvent.eventId,
-        externalRef: webhookEvent.externalRef,
-        processingTime,
-        ...result
+        summary,
+        results,
+        processingTime
       }
     } catch (error) {
       const processingTime = Date.now() - startTime
-
+      
       logger.error('WebhookService: Error processing webhook', {
         provider: providerName,
         error: error.message,
         stack: error.stack,
         processingTime: `${processingTime}ms`
       })
-
-      // Registrar el error en la base de datos si es posible
-      try {
-        if (req.body) {
-          // Convertir rawBody a string para evitar errores de validación
-          let rawBodyString = ''
-          if (Buffer.isBuffer(req.body)) {
-            rawBodyString = req.body.toString('utf8')
-          } else if (typeof req.body === 'string') {
-            rawBodyString = req.body
-          } else if (typeof req.body === 'object') {
-            rawBodyString = JSON.stringify(req.body)
-          } else {
-            rawBodyString = String(req.body)
-          }
-
-          const webhookEvent = {
-            provider: providerName,
-            type: 'unknown',
-            externalRef: 'unknown',
-            status: 'FAILED',
-            amount: 0,
-            currency: 'USD',
-            rawHeaders: req.headers,
-            rawBody: rawBodyString,
-            payload: {},
-            errorMessage: error.message
-          }
-
-          await this.registerWebhookEvent(webhookEvent)
-        }
-      } catch (dbError) {
-        logger.error('WebhookService: Error registering failed webhook', {
-          error: dbError.message
-        })
-      }
-
       throw error
     }
   }
@@ -221,7 +259,8 @@ class WebhookService {
       payload: sanitizedEvent.payload,
       rawHeaders: sanitizedEvent.rawHeaders,
       rawBody: sanitizedEvent.rawBody,
-      errorMessage: sanitizedEvent.errorMessage
+      errorMessage: sanitizedEvent.errorMessage,
+      eventIndex: sanitizedEvent.eventIndex
     })
   }
 
@@ -242,7 +281,8 @@ class WebhookService {
       payload: this.sanitizeObject(webhookEvent.payload) || {},
       rawHeaders: this.sanitizeObject(webhookEvent.rawHeaders) || {},
       rawBody: this.sanitizeRawBody(webhookEvent.rawBody) || '',
-      errorMessage: this.sanitizeString(webhookEvent.errorMessage) || null
+      errorMessage: this.sanitizeString(webhookEvent.errorMessage) || null,
+      eventIndex: this.sanitizeNumber(webhookEvent.eventIndex) || null
     }
 
     return sanitized

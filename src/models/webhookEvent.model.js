@@ -68,6 +68,11 @@ WebhookEvent.init({
     type: DataTypes.TEXT,
     allowNull: true,
     comment: 'Mensaje de error si falló el procesamiento'
+  },
+  eventIndex: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'Índice del evento en webhooks múltiples (0-based)'
   }
 }, {
   sequelize,
@@ -90,6 +95,9 @@ WebhookEvent.init({
     },
     {
       fields: ['provider', 'processed_at']
+    },
+    {
+      fields: ['event_index']
     }
   ]
 })

@@ -38,22 +38,17 @@ class WebhookController {
         success: true,
         data: {
           status: result.status,
-          eventId: result.eventId,
-          externalRef: result.externalRef,
-          processingTime: result.processingTime,
-          transactionId: result.transactionId,
-          orderId: result.orderId,
-          oldStatus: result.oldStatus,
-          newStatus: result.newStatus
+          summary: result.summary,
+          results: result.results,
+          processingTime: result.processingTime
         },
-        message: 'Webhook processed successfully'
+        message: `Webhook processed successfully: ${result.summary.processedEvents} events processed, ${result.summary.failedEvents} failed, ${result.summary.duplicateEvents} duplicates`
       })
 
       logger.info('WebhookController: Webhook processed successfully', {
         provider,
         status: result.status,
-        eventId: result.eventId,
-        externalRef: result.externalRef,
+        summary: result.summary,
         processingTime: result.processingTime
       })
     } catch (error) {

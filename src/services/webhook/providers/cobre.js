@@ -131,28 +131,44 @@ class CobreAdapter {
   /**
    * Parsea el webhook de Cobre y lo normaliza
    * @param {express.Request} req - Request de Express
-   * @returns {WebhookEvent} - Evento normalizado
+   * @returns {WebhookEvent[]} - Array de eventos normalizados
    */
   parseWebhook (req) {
     try {
       const { body, rawBodyString } = this._parseRequestBody(req)
-      const eventContext = this._createEventContext(body)
-
-      logger.info('Cobre webhook: Processing event', eventContext)
-
-      const eventData = this._processEventByType(body, eventContext)
-      const webhookEvent = this._createWebhookEvent(body, eventData, req.headers, rawBodyString)
-
-      logger.info('Cobre webhook: Successfully parsed', {
-        eventId: webhookEvent.eventId,
-        externalRef: webhookEvent.externalRef,
-        type: webhookEvent.type,
-        status: webhookEvent.status,
-        amount: webhookEvent.amount,
-        currency: webhookEvent.currency
+      
+      // Detectar si el webhook contiene múltiples eventos
+      const events = this._extractEvents(body)
+      
+      logger.info('Cobre webhook: Processing events', {
+        totalEvents: events.length,
+        eventKeys: events.map(e => e.event_key)
       })
 
-      return webhookEvent
+      const webhookEvents = events.map((eventBody, index) => {
+        const eventContext = this._createEventContext(eventBody)
+        const eventData = this._processEventByType(eventBody, eventContext)
+        const webhookEvent = this._createWebhookEvent(eventBody, eventData, req.headers, rawBodyString, index)
+
+        logger.info('Cobre webhook: Successfully parsed event', {
+          eventIndex: index,
+          eventId: webhookEvent.eventId,
+          externalRef: webhookEvent.externalRef,
+          type: webhookEvent.type,
+          status: webhookEvent.status,
+          amount: webhookEvent.amount,
+          currency: webhookEvent.currency
+        })
+
+        return webhookEvent
+      })
+
+      logger.info('Cobre webhook: All events parsed successfully', {
+        totalEvents: webhookEvents.length,
+        eventIds: webhookEvents.map(e => e.eventId)
+      })
+
+      return webhookEvents
     } catch (error) {
       logger.error('Cobre webhook: Parsing failed', {
         error: error.message,
@@ -184,6 +200,50 @@ class CobreAdapter {
     }
 
     throw new Error(`Unexpected body type: ${typeof req.body}`)
+  }
+
+  /**
+   * Extrae eventos del body del webhook
+   * @param {Object} body - Cuerpo del webhook
+   * @returns {Array} - Array de eventos
+   * @private
+   */
+  _extractEvents (body) {
+    // Si el body es un array, procesar cada elemento como un evento
+    if (Array.isArray(body)) {
+      logger.info('Cobre webhook: Detected array of events', {
+        eventCount: body.length
+      })
+      return body
+    }
+
+    // Si el body tiene una propiedad 'events' que es un array
+    if (body.events && Array.isArray(body.events)) {
+      logger.info('Cobre webhook: Detected events array in body', {
+        eventCount: body.events.length
+      })
+      return body.events
+    }
+
+    // Si el body tiene una propiedad 'data' que es un array
+    if (body.data && Array.isArray(body.data)) {
+      logger.info('Cobre webhook: Detected data array in body', {
+        eventCount: body.data.length
+      })
+      return body.data
+    }
+
+    // Si el body tiene una propiedad 'webhooks' que es un array
+    if (body.webhooks && Array.isArray(body.webhooks)) {
+      logger.info('Cobre webhook: Detected webhooks array in body', {
+        eventCount: body.webhooks.length
+      })
+      return body.webhooks
+    }
+
+    // Caso por defecto: tratar el body como un solo evento
+    logger.info('Cobre webhook: Treating body as single event')
+    return [body]
   }
 
   /**
@@ -352,10 +412,11 @@ class CobreAdapter {
    * @param {Object} eventData - Datos procesados del evento
    * @param {Object} headers - Headers de la request
    * @param {string} rawBodyString - Cuerpo raw como string
+   * @param {number} eventIndex - Índice del evento en el array
    * @returns {Object} - WebhookEvent
    * @private
    */
-  _createWebhookEvent (body, eventData, headers, rawBodyString) {
+  _createWebhookEvent (body, eventData, headers, rawBodyString, eventIndex) {
     const amount = body.content?.amount || body.amount
     const currency = body.content?.currency || body.currency || 'USD'
 
@@ -373,7 +434,8 @@ class CobreAdapter {
       currency: currency.toUpperCase(),
       rawHeaders: headers,
       rawBody: rawBodyString,
-      payload: body
+      payload: body,
+      eventIndex: eventIndex // Add eventIndex to the event object
     }
   }
 
