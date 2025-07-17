@@ -9,13 +9,38 @@ const { securityHeaders, logPublicRequest, sanitizeInput } = require('../middlew
 // Apply security middleware to all webhook routes
 router.use(securityHeaders)
 router.use(logPublicRequest)
-router.use(sanitizeInput)
 router.use(webhookLimiter)
+
+// Webhook-specific middleware that preserves raw body
+const webhookMiddleware = (req, res, next) => {
+  // Store original raw body before any processing
+  req.originalRawBody = req.body
+  
+  // Basic validation without sanitization
+  if (!req.body || req.body.length === 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'Empty webhook body'
+    })
+  }
+  
+  // Validate Content-Type
+  const contentType = req.get('Content-Type')
+  if (!contentType || !contentType.includes('application/json')) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid Content-Type, expected application/json'
+    })
+  }
+  
+  next()
+}
 
 // Endpoint principal of webhooks (no authentication required - verified by signature)
 // Use express.raw() to preserve the original body for signature validation
 router.post('/:provider',
-  express.raw({ type: 'application/json' }),
+  express.raw({ type: 'application/json', limit: '10mb' }),
+  webhookMiddleware,
   webhookController.handleWebhook.bind(webhookController)
 )
 

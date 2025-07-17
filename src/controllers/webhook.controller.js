@@ -23,9 +23,15 @@ class WebhookController {
       }
 
       // Preservar el raw body para la verificación de firma
-      if (Buffer.isBuffer(req.body)) {
+      if (req.originalRawBody) {
+        req.rawBody = req.originalRawBody
+        logger.debug('WebhookController: Using original raw body', {
+          provider,
+          rawBodyLength: req.rawBody.length
+        })
+      } else if (Buffer.isBuffer(req.body)) {
         req.rawBody = req.body
-        logger.debug('WebhookController: Preserved raw body', {
+        logger.debug('WebhookController: Using buffer body as fallback', {
           provider,
           rawBodyLength: req.rawBody.length
         })
