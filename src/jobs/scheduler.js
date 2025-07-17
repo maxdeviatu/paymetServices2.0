@@ -43,10 +43,10 @@ class JobScheduler {
 
     // Register default jobs
     this.registerJob(OrderTimeoutJob)
-    
+
     // Siempre registrar waitlist job para permitir ejecución manual
     this.registerJob(WaitlistProcessingJob)
-    
+
     if (process.env.ENABLE_WAITLIST_PROCESSING === 'true') {
       logger.info('✅ Waitlist processing job habilitado para ejecución automática')
     } else {
@@ -205,10 +205,10 @@ process.on('SIGINT', async () => {
 if (process.env.NODE_ENV !== 'test') {
   // Always register order timeout job
   jobScheduler.registerJob(OrderTimeoutJob)
-  
+
   // Always register waitlist processing (for manual execution even if disabled)
   jobScheduler.registerJob(WaitlistProcessingJob)
-  
+
   // Only register invoice processing if enabled
   if (process.env.ENABLE_INVOICE_PROCESSING !== 'false') {
     jobScheduler.registerJob(InvoiceProcessingJob)

@@ -6,7 +6,7 @@ const logger = require('../config/logger')
  * Se ejecuta diariamente para procesar transacciones pendientes
  */
 class InvoiceProcessingJob {
-  constructor() {
+  constructor () {
     this.name = 'invoiceProcessing'
     this.invoiceService = new InvoiceService()
     this.isRunning = false
@@ -17,7 +17,7 @@ class InvoiceProcessingJob {
   /**
    * Ejecuta el job de procesamiento de facturas
    */
-  async run() {
+  async run () {
     if (this.isRunning) {
       logger.warn('⚠️ Job de facturación ya está en ejecución, omitiendo...')
       return
@@ -85,7 +85,7 @@ class InvoiceProcessingJob {
    * Ejecuta el job de forma manual (forzada)
    * @param {Object} options - Opciones de ejecución
    */
-  async runManual(options = {}) {
+  async runManual (options = {}) {
     if (this.isRunning) {
       throw new Error('Job de facturación ya está en ejecución')
     }
@@ -149,7 +149,7 @@ class InvoiceProcessingJob {
   /**
    * Obtiene el estado del job
    */
-  getStatus() {
+  getStatus () {
     return {
       isRunning: this.isRunning,
       lastRun: this.lastRun,
@@ -161,38 +161,38 @@ class InvoiceProcessingJob {
   /**
    * Calcula la próxima ejecución programada (simplificado)
    */
-  getNextScheduledRun() {
+  getNextScheduledRun () {
     // Para simplificar, calculamos la próxima ejecución a las 2 AM
     const now = new Date()
     const next = new Date(now)
     next.setHours(2, 0, 0, 0)
-    
+
     // Si ya pasaron las 2 AM de hoy, programar para mañana
     if (next <= now) {
       next.setDate(next.getDate() + 1)
     }
-    
+
     return next
   }
 
   /**
    * Verifica si es tiempo de ejecutar el job
    */
-  shouldRun() {
+  shouldRun () {
     if (this.isRunning) return false
-    
+
     const now = new Date()
     const nextRun = this.getNextScheduledRun()
-    
+
     // Si no hay última ejecución, verificar si es tiempo
     if (!this.lastRun) {
       return now.getHours() === 2 && now.getMinutes() < 5 // Ventana de 5 minutos
     }
-    
+
     // Verificar si han pasado más de 23 horas desde la última ejecución
     const timeSinceLastRun = now.getTime() - this.lastRun.getTime()
     const hoursThreshold = 23 * 60 * 60 * 1000 // 23 horas en milisegundos
-    
+
     return timeSinceLastRun > hoursThreshold && now.getHours() === 2
   }
 }

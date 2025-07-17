@@ -6,11 +6,11 @@ const emailService = require('./email')
  * v2.0: Solo mantiene compatibilidad con métricas, el envío es directo
  */
 class EmailQueueService {
-  constructor() {
+  constructor () {
     this.intervalSeconds = parseInt(process.env.WAITLIST_EMAIL_INTERVAL_SECONDS) || 30
     this.maxRetries = parseInt(process.env.WAITLIST_EMAIL_MAX_RETRIES) || 3
     this.maxQueueSize = parseInt(process.env.WAITLIST_EMAIL_QUEUE_MAX_SIZE) || 1000
-    
+
     logger.info('EmailQueueService initialized (v2.0 - Direct sending mode)', {
       intervalSeconds: this.intervalSeconds,
       maxRetries: this.maxRetries,
@@ -21,7 +21,7 @@ class EmailQueueService {
   /**
    * Inicializar el servicio (compatibilidad)
    */
-  initialize() {
+  initialize () {
     logger.info('EmailQueueService: Starting initialization', {
       queueSize: 0,
       isProcessing: false,
@@ -37,11 +37,11 @@ class EmailQueueService {
   /**
    * Agregar notificación de lista de espera (compatibilidad - envío directo)
    */
-  async queueWaitlistNotification(waitlistEntry) {
+  async queueWaitlistNotification (waitlistEntry) {
     try {
       // v2.0: Envío directo en lugar de cola
       const { Order } = require('../models')
-      
+
       const order = await Order.findByPk(waitlistEntry.orderId, {
         include: ['customer', 'product']
       })
@@ -77,7 +77,7 @@ class EmailQueueService {
   /**
    * Obtener estadísticas de la cola (compatibilidad)
    */
-  getQueueStats() {
+  getQueueStats () {
     return {
       queueSize: 0, // v2.0: No usa cola
       isProcessing: false,
@@ -93,7 +93,7 @@ class EmailQueueService {
   /**
    * Enviar email de prueba
    */
-  async testEmailQueue(testEmail = 'test@example.com') {
+  async testEmailQueue (testEmail = 'test@example.com') {
     try {
       logger.info('EmailQueueService: Testing email functionality', {
         testEmail,

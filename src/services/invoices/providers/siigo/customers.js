@@ -5,18 +5,18 @@ const logger = require('../../../../config/logger')
  * Servicio para gestión de clientes en Siigo
  */
 class SiigoCustomerService {
-  constructor(authService, baseURL, partnerId) {
+  constructor (authService, baseURL, partnerId) {
     this.authService = authService
     this.baseURL = baseURL
     this.partnerId = partnerId
-    
+
     // Cliente por defecto (consumidor final)
     this.defaultCustomer = {
-      person_type: "Person",
-      id_type: "13", // Cédula de ciudadanía
-      identification: "222222222",
+      person_type: 'Person',
+      id_type: '13', // Cédula de ciudadanía
+      identification: '222222222',
       branch_office: 0,
-      name: ["CONSUMIDOR", "FINAL"]
+      name: ['CONSUMIDOR', 'FINAL']
     }
   }
 
@@ -25,15 +25,15 @@ class SiigoCustomerService {
    * @param {string} documentNumber - Número de documento del cliente
    * @returns {Promise<Object|null>} Cliente encontrado o null
    */
-  async findCustomerByDocument(documentNumber) {
+  async findCustomerByDocument (documentNumber) {
     try {
       const token = await this.authService.getAccessToken()
-      
+
       logger.debug(`🔍 Buscando cliente por documento: ${documentNumber}`)
-      
+
       const response = await axios.get(`${this.baseURL}/v1/customers`, {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
           'Partner-Id': this.partnerId
         },
@@ -53,7 +53,6 @@ class SiigoCustomerService {
       const customer = customers[0]
       logger.info(`✅ Cliente encontrado en Siigo: ${customer.name.join(' ')} (${documentNumber})`)
       return customer
-      
     } catch (error) {
       logger.error(`❌ Error buscando cliente por documento ${documentNumber}:`, {
         status: error.response?.status,
@@ -68,15 +67,15 @@ class SiigoCustomerService {
    * @param {Object} userData - Datos del usuario del sistema
    * @returns {Promise<Object|null>} Cliente creado o null si falla
    */
-  async createCustomer(userData) {
+  async createCustomer (userData) {
     try {
       const token = await this.authService.getAccessToken()
-      
+
       logger.info(`👤 Creando cliente en Siigo: ${userData.firstName} ${userData.lastName}`)
-      
+
       const customerData = {
-        type: "Customer",
-        person_type: "Person",
+        type: 'Customer',
+        person_type: 'Person',
         id_type: this.mapDocumentType(userData.documentType),
         identification: userData.documentNumber,
         name: [userData.firstName, userData.lastName],
@@ -85,14 +84,14 @@ class SiigoCustomerService {
         vat_responsible: false,
         fiscal_responsibilities: [
           {
-            code: "R-99-PN" // Régimen simplificado - persona natural
+            code: 'R-99-PN' // Régimen simplificado - persona natural
           }
         ],
         phones: userData.phone ? [
           {
-            indicative: "57", // Colombia
+            indicative: '57', // Colombia
             number: userData.phone.replace(/\D/g, '').slice(-10), // Solo números, máximo 10 dígitos
-            extension: ""
+            extension: ''
           }
         ] : [],
         contacts: [
@@ -101,34 +100,33 @@ class SiigoCustomerService {
             last_name: userData.lastName,
             email: userData.email,
             phone: userData.phone ? {
-              indicative: "57",
+              indicative: '57',
               number: userData.phone.replace(/\D/g, '').slice(-10), // Solo números, máximo 10 dígitos
-              extension: ""
+              extension: ''
             } : undefined
           }
         ],
-        comments: `Cliente creado automáticamente desde sistema de pagos`
+        comments: 'Cliente creado automáticamente desde sistema de pagos'
       }
 
       const response = await axios.post(`${this.baseURL}/v1/customers`, customerData, {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
           'Partner-Id': this.partnerId
         }
       })
 
       const customer = response.data
-      logger.info(`✅ Cliente creado exitosamente en Siigo:`, {
+      logger.info('✅ Cliente creado exitosamente en Siigo:', {
         customerId: customer.id,
         name: customer.name.join(' '),
         identification: customer.identification
       })
 
       return customer
-      
     } catch (error) {
-      logger.error(`❌ Error creando cliente en Siigo:`, {
+      logger.error('❌ Error creando cliente en Siigo:', {
         status: error.response?.status,
         data: error.response?.data,
         message: error.message
@@ -142,19 +140,19 @@ class SiigoCustomerService {
    * @param {Object} userData - Datos del usuario del sistema
    * @returns {Promise<Object>} Cliente para usar en la factura
    */
-  async getOrCreateCustomer(userData) {
+  async getOrCreateCustomer (userData) {
     try {
-      logger.debug(`🔍 Procesando datos del cliente:`, {
+      logger.debug('🔍 Procesando datos del cliente:', {
         firstName: userData.firstName,
         lastName: userData.lastName,
         documentType: userData.documentType,
         documentNumber: userData.documentNumber,
         email: userData.email
       })
-      
+
       // 1. Primero intentar buscar el cliente existente
       let customer = await this.findCustomerByDocument(userData.documentNumber)
-      
+
       if (customer) {
         logger.info(`✅ Usando cliente existente: ${customer.name.join(' ')}`)
         const mappedCustomer = {
@@ -164,13 +162,13 @@ class SiigoCustomerService {
           branch_office: customer.branch_office,
           name: customer.name
         }
-        logger.debug(`📋 Datos del cliente mapeado:`, mappedCustomer)
+        logger.debug('📋 Datos del cliente mapeado:', mappedCustomer)
         return mappedCustomer
       }
 
       // 2. Si no existe, intentar crearlo
       customer = await this.createCustomer(userData)
-      
+
       if (customer) {
         logger.info(`✅ Usando cliente recién creado: ${customer.name.join(' ')}`)
         const mappedCustomer = {
@@ -180,17 +178,16 @@ class SiigoCustomerService {
           branch_office: customer.branch_office,
           name: customer.name
         }
-        logger.debug(`📋 Datos del cliente recién creado:`, mappedCustomer)
+        logger.debug('📋 Datos del cliente recién creado:', mappedCustomer)
         return mappedCustomer
       }
 
       // 3. Si falla todo, usar cliente por defecto
-      logger.warn(`⚠️ No se pudo crear/encontrar cliente, usando consumidor final`)
-      logger.debug(`📋 Datos del cliente por defecto:`, this.defaultCustomer)
+      logger.warn('⚠️ No se pudo crear/encontrar cliente, usando consumidor final')
+      logger.debug('📋 Datos del cliente por defecto:', this.defaultCustomer)
       return this.defaultCustomer
-      
     } catch (error) {
-      logger.error(`❌ Error en getOrCreateCustomer:`, error)
+      logger.error('❌ Error en getOrCreateCustomer:', error)
       return this.defaultCustomer
     }
   }
@@ -200,20 +197,20 @@ class SiigoCustomerService {
    * @param {string} documentType - Tipo de documento del sistema
    * @returns {string} Código de Siigo
    */
-  mapDocumentType(documentType) {
+  mapDocumentType (documentType) {
     const mapping = {
-      'CC': '13',   // Cédula de ciudadanía
-      'CE': '22',   // Cédula de extranjería  
-      'NIT': '31',  // NIT
-      'PAS': '41',  // Pasaporte
-      'TI': '12',   // Tarjeta de identidad
-      'RC': '11',   // Registro civil
-      'TE': '21',   // Tarjeta de extranjería
-      'NUIP': '91', // NUIP
-      'PEP': '47',  // Permiso especial de permanencia PEP
-      'PPT': '48'   // Permiso protección temporal PPT
+      CC: '13', // Cédula de ciudadanía
+      CE: '22', // Cédula de extranjería
+      NIT: '31', // NIT
+      PAS: '41', // Pasaporte
+      TI: '12', // Tarjeta de identidad
+      RC: '11', // Registro civil
+      TE: '21', // Tarjeta de extranjería
+      NUIP: '91', // NUIP
+      PEP: '47', // Permiso especial de permanencia PEP
+      PPT: '48' // Permiso protección temporal PPT
     }
-    
+
     return mapping[documentType] || '13' // Por defecto cédula de ciudadanía
   }
 }

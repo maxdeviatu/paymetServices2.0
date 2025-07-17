@@ -25,9 +25,9 @@ class EmailService {
       })
 
       const result = await sendEmail({
-        to: { 
-          email: customer.email, 
-          name: `${customer.first_name} ${customer.last_name}` 
+        to: {
+          email: customer.email,
+          name: `${customer.first_name} ${customer.last_name}`
         },
         subject: `Tu producto ${product.name} está listo`,
         templateName: 'license-delivery',
@@ -78,9 +78,9 @@ class EmailService {
       })
 
       await sendEmail({
-        to: { 
-          email: customer.email, 
-          name: `${customer.first_name} ${customer.last_name}` 
+        to: {
+          email: customer.email,
+          name: `${customer.first_name} ${customer.last_name}`
         },
         subject: 'Estás en la lista de espera',
         templateName: 'waitlist-notification',

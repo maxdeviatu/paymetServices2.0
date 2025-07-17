@@ -9,7 +9,7 @@ const { sequelize } = require('../src/models/db')
 const Invoice = require('../src/models/invoice.model')
 const logger = require('../src/config/logger')
 
-async function createInvoicesTable() {
+async function createInvoicesTable () {
   try {
     logger.info('🚀 Iniciando creación de tabla de facturas...')
 
@@ -27,7 +27,7 @@ async function createInvoicesTable() {
 
     if (invoicesTableExists) {
       logger.info('✅ Verificación: Tabla "invoices" existe en la base de datos')
-      
+
       // Mostrar estructura de la tabla
       const tableDescription = await sequelize.getQueryInterface().describeTable('invoices')
       logger.info('📋 Estructura de la tabla "invoices":')

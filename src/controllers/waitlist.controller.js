@@ -31,7 +31,7 @@ exports.getMetrics = async (req, res) => {
 exports.getWaitlist = async (req, res) => {
   try {
     const filters = {}
-    
+
     if (req.query.status) {
       filters.status = req.query.status
     }
@@ -155,7 +155,7 @@ exports.getWaitlistEntry = async (req, res) => {
     const { waitlistEntryId } = req.params
 
     const entries = await waitlistService.getWaitlist({ id: waitlistEntryId })
-    
+
     if (entries.length === 0) {
       return res.status(404).json({
         success: false,
@@ -225,4 +225,4 @@ exports.runJob = async (req, res) => {
       message: error.message
     })
   }
-} 
+}

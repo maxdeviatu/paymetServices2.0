@@ -14,9 +14,9 @@ const { requireRole } = require('../middlewares/role')
  * @desc Obtener estadísticas de la cola de correos (compatibilidad)
  * @access Super Administrador
  */
-router.get('/stats', 
-  authenticate, 
-  requireRole('SUPER_ADMIN'), 
+router.get('/stats',
+  authenticate,
+  requireRole('SUPER_ADMIN'),
   emailQueueController.getQueueStats
 )
 
@@ -25,9 +25,9 @@ router.get('/stats',
  * @desc Test del sistema de envío de correos
  * @access Super Administrador
  */
-router.post('/test', 
-  authenticate, 
-  requireRole('SUPER_ADMIN'), 
+router.post('/test',
+  authenticate,
+  requireRole('SUPER_ADMIN'),
   emailQueueController.testQueue
 )
 

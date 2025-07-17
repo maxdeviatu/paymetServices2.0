@@ -9,24 +9,24 @@ const SiigoCustomerService = require('./customers')
  * Implementa la interfaz estándar de proveedores de facturación
  */
 class SiigoProvider {
-  constructor() {
+  constructor () {
     this.authService = new SiigoAuthService()
     this.productService = new SiigoProductService()
     this.customerService = new SiigoCustomerService(this.authService, process.env.SIIGO_API_URL, process.env.SIIGO_PARTNER_ID)
     this.baseURL = process.env.SIIGO_API_URL
     this.partnerId = process.env.SIIGO_PARTNER_ID
-    
+
     // Configuración por defecto para facturas
     this.defaultConfig = {
       documentId: parseInt(process.env.SIIGO_SALES_DOCUMENT_ID, 10),
       sellerId: parseInt(process.env.SIIGO_SELLER_ID, 10),
       paymentTypeId: parseInt(process.env.SIIGO_PAYMENT_TYPE_ID, 10),
       defaultCustomer: {
-        person_type: "Person",
-        id_type: "13",
-        identification: "222222222",
+        person_type: 'Person',
+        id_type: '13',
+        identification: '222222222',
         branch_office: 0,
-        name: ["CLIENTE NO REGISTRADO", "CLIENTE NO REGISTRADO"]
+        name: ['CLIENTE NO REGISTRADO', 'CLIENTE NO REGISTRADO']
       }
     }
   }
@@ -34,21 +34,21 @@ class SiigoProvider {
   /**
    * Autentica con el proveedor
    */
-  async authenticate() {
+  async authenticate () {
     return await this.authService.authenticate()
   }
 
   /**
    * Verifica si el token es válido
    */
-  isTokenValid() {
+  isTokenValid () {
     return this.authService.isTokenValid()
   }
 
   /**
    * Fuerza la renovación del token
    */
-  async refreshToken() {
+  async refreshToken () {
     return await this.authService.refreshToken()
   }
 
@@ -61,7 +61,7 @@ class SiigoProvider {
    * @param {Object} customer - Cliente del sistema
    * @returns {Promise<Object>} Respuesta de Siigo con datos de la factura
    */
-  async createInvoice({ transaction, order, product, customer }) {
+  async createInvoice ({ transaction, order, product, customer }) {
     try {
       logger.info(`📄 Creando factura en Siigo para transacción ${transaction.id}`)
 
@@ -118,14 +118,14 @@ class SiigoProvider {
       // Enviar solicitud a Siigo
       const response = await axios.post(`${this.baseURL}/v1/invoices`, invoiceData, {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
           'Partner-Id': this.partnerId
         }
       })
 
       const invoice = response.data
-      logger.info(`✅ Factura creada exitosamente en Siigo:`, {
+      logger.info('✅ Factura creada exitosamente en Siigo:', {
         siigoInvoiceId: invoice.id,
         invoiceNumber: invoice.number,
         transactionId: transaction.id
@@ -161,7 +161,7 @@ class SiigoProvider {
    * @param {string} providerInvoiceId - ID de la factura en Siigo
    * @returns {Promise<Object>} Estado de la factura
    */
-  async getInvoiceStatus(providerInvoiceId) {
+  async getInvoiceStatus (providerInvoiceId) {
     try {
       logger.debug(`🔍 Consultando estado de factura ${providerInvoiceId} en Siigo`)
 
@@ -169,7 +169,7 @@ class SiigoProvider {
 
       const response = await axios.get(`${this.baseURL}/v1/invoices/${providerInvoiceId}`, {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
           'Partner-Id': this.partnerId
         }
@@ -197,7 +197,7 @@ class SiigoProvider {
    * @param {string} createdStart - Fecha de inicio en formato YYYY-MM-DD
    * @returns {Promise<Array>} Lista de facturas
    */
-  async listInvoices(createdStart) {
+  async listInvoices (createdStart) {
     try {
       logger.debug(`📋 Listando facturas desde: ${createdStart}`)
 
@@ -206,7 +206,7 @@ class SiigoProvider {
       let url = `${this.baseURL}/v1/invoices?created_start=${createdStart}`
 
       const headers = {
-        'Authorization': `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
         'Partner-Id': this.partnerId
       }
@@ -215,7 +215,7 @@ class SiigoProvider {
         const response = await axios.get(url, { headers })
         const data = response.data
         allInvoices = allInvoices.concat(data.results)
-        
+
         if (data._links && data._links.next && data._links.next.href) {
           url = data._links.next.href
         } else {

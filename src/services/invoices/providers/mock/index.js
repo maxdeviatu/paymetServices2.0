@@ -5,7 +5,7 @@ const logger = require('../../../../config/logger')
  * Simula el comportamiento de un proveedor real sin hacer llamadas externas
  */
 class MockProvider {
-  constructor() {
+  constructor () {
     this.mockToken = 'mock-token-123456'
     this.tokenExpiration = null
     this.invoiceCounter = 1000
@@ -14,7 +14,7 @@ class MockProvider {
   /**
    * Simula autenticación
    */
-  async authenticate() {
+  async authenticate () {
     logger.info('🔐 Autenticación Mock iniciada')
     this.tokenExpiration = new Date(Date.now() + 3600000) // 1 hora
     logger.info('✅ Autenticación Mock exitosa')
@@ -24,14 +24,14 @@ class MockProvider {
   /**
    * Verifica si el token mock es válido
    */
-  isTokenValid() {
+  isTokenValid () {
     return this.tokenExpiration && this.tokenExpiration > new Date()
   }
 
   /**
    * Simula renovación del token
    */
-  async refreshToken() {
+  async refreshToken () {
     logger.info('🔄 Renovando token Mock')
     return await this.authenticate()
   }
@@ -41,7 +41,7 @@ class MockProvider {
    * @param {Object} params - Parámetros de la factura
    * @returns {Promise<Object>} Datos simulados de la factura
    */
-  async createInvoice({ transaction, order, product, customer }) {
+  async createInvoice ({ transaction, order, product, customer }) {
     try {
       logger.info(`📄 Creando factura Mock para transacción ${transaction.id}`)
 
@@ -51,7 +51,7 @@ class MockProvider {
       const mockInvoiceId = `MOCK-${this.invoiceCounter++}`
       const mockInvoiceNumber = `FV-${Date.now()}`
 
-      logger.info(`✅ Factura Mock creada exitosamente:`, {
+      logger.info('✅ Factura Mock creada exitosamente:', {
         mockInvoiceId,
         mockInvoiceNumber,
         transactionId: transaction.id
@@ -86,7 +86,7 @@ class MockProvider {
    * @param {string} providerInvoiceId - ID de la factura mock
    * @returns {Promise<Object>} Estado simulado de la factura
    */
-  async getInvoiceStatus(providerInvoiceId) {
+  async getInvoiceStatus (providerInvoiceId) {
     try {
       logger.debug(`🔍 Consultando estado de factura Mock ${providerInvoiceId}`)
 
@@ -116,7 +116,7 @@ class MockProvider {
    * @param {string} createdStart - Fecha de inicio
    * @returns {Promise<Array>} Lista simulada de facturas
    */
-  async listInvoices(createdStart) {
+  async listInvoices (createdStart) {
     try {
       logger.debug(`📋 Listando facturas Mock desde: ${createdStart}`)
 

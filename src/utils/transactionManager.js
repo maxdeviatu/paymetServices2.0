@@ -10,7 +10,7 @@ class TransactionManager {
   /**
    * Configuraciones de transacciones optimizadas para diferentes escenarios
    */
-  static get TRANSACTION_CONFIGS() {
+  static get TRANSACTION_CONFIGS () {
     return {
       // Para operaciones de lectura intensiva (webhooks, consultas)
       HIGH_CONCURRENCY: {
@@ -50,7 +50,7 @@ class TransactionManager {
    * @param {Object} options - Opciones adicionales
    * @returns {Promise<any>} - Resultado de la transacción
    */
-  static async executeWebhookTransaction(callback, options = {}) {
+  static async executeWebhookTransaction (callback, options = {}) {
     const config = {
       ...this.TRANSACTION_CONFIGS.HIGH_CONCURRENCY,
       ...options
@@ -63,16 +63,16 @@ class TransactionManager {
     })
 
     const startTime = Date.now()
-    
+
     try {
       const result = await sequelize.transaction(config, callback)
-      
+
       const duration = Date.now() - startTime
       logger.debug('TransactionManager: Webhook transaction completed', {
         duration: `${duration}ms`,
         isolationLevel: config.isolationLevel
       })
-      
+
       return result
     } catch (error) {
       const duration = Date.now() - startTime
@@ -92,7 +92,7 @@ class TransactionManager {
    * @param {Object} options - Opciones adicionales
    * @returns {Promise<any>} - Resultado de la transacción
    */
-  static async executePaymentTransaction(callback, options = {}) {
+  static async executePaymentTransaction (callback, options = {}) {
     const config = {
       ...this.TRANSACTION_CONFIGS.CONSISTENT_WRITE,
       ...options
@@ -105,16 +105,16 @@ class TransactionManager {
     })
 
     const startTime = Date.now()
-    
+
     try {
       const result = await sequelize.transaction(config, callback)
-      
+
       const duration = Date.now() - startTime
       logger.info('TransactionManager: Payment transaction completed', {
         duration: `${duration}ms`,
         isolationLevel: config.isolationLevel
       })
-      
+
       return result
     } catch (error) {
       const duration = Date.now() - startTime
@@ -134,7 +134,7 @@ class TransactionManager {
    * @param {Object} options - Opciones adicionales
    * @returns {Promise<any>} - Resultado de la transacción
    */
-  static async executeInventoryTransaction(callback, options = {}) {
+  static async executeInventoryTransaction (callback, options = {}) {
     const config = {
       ...this.TRANSACTION_CONFIGS.SERIALIZABLE_INVENTORY,
       ...options
@@ -147,16 +147,16 @@ class TransactionManager {
     })
 
     const startTime = Date.now()
-    
+
     try {
       const result = await sequelize.transaction(config, callback)
-      
+
       const duration = Date.now() - startTime
       logger.info('TransactionManager: Inventory transaction completed', {
         duration: `${duration}ms`,
         isolationLevel: config.isolationLevel
       })
-      
+
       return result
     } catch (error) {
       const duration = Date.now() - startTime
@@ -176,7 +176,7 @@ class TransactionManager {
    * @param {Object} options - Opciones adicionales
    * @returns {Promise<any>} - Resultado de la transacción
    */
-  static async executeBulkTransaction(callback, options = {}) {
+  static async executeBulkTransaction (callback, options = {}) {
     const config = {
       ...this.TRANSACTION_CONFIGS.BULK_OPERATIONS,
       ...options
@@ -189,17 +189,17 @@ class TransactionManager {
     })
 
     const startTime = Date.now()
-    
+
     try {
       const result = await sequelize.transaction(config, callback)
-      
+
       const duration = Date.now() - startTime
       logger.info('TransactionManager: Bulk transaction completed', {
         duration: `${duration}ms`,
         isolationLevel: config.isolationLevel,
         recordsProcessed: options.recordsCount || 'unknown'
       })
-      
+
       return result
     } catch (error) {
       const duration = Date.now() - startTime
@@ -219,7 +219,7 @@ class TransactionManager {
    * @param {Object} options - Opciones adicionales
    * @returns {Promise<any>} - Resultado de la transacción
    */
-  static async executeReadOnlyTransaction(callback, options = {}) {
+  static async executeReadOnlyTransaction (callback, options = {}) {
     const config = {
       ...this.TRANSACTION_CONFIGS.READ_ONLY,
       ...options
@@ -231,16 +231,16 @@ class TransactionManager {
     })
 
     const startTime = Date.now()
-    
+
     try {
       const result = await sequelize.transaction(config, callback)
-      
+
       const duration = Date.now() - startTime
       logger.debug('TransactionManager: Read-only transaction completed', {
         duration: `${duration}ms`,
         isolationLevel: config.isolationLevel
       })
-      
+
       return result
     } catch (error) {
       const duration = Date.now() - startTime
@@ -261,9 +261,9 @@ class TransactionManager {
    * @param {Object} customOptions - Opciones personalizadas
    * @returns {Promise<any>} - Resultado de la transacción
    */
-  static async executeCustomTransaction(callback, configName, customOptions = {}) {
+  static async executeCustomTransaction (callback, configName, customOptions = {}) {
     const baseConfig = this.TRANSACTION_CONFIGS[configName]
-    
+
     if (!baseConfig) {
       throw new Error(`Unknown transaction configuration: ${configName}`)
     }
@@ -281,17 +281,17 @@ class TransactionManager {
     })
 
     const startTime = Date.now()
-    
+
     try {
       const result = await sequelize.transaction(config, callback)
-      
+
       const duration = Date.now() - startTime
       logger.debug('TransactionManager: Custom transaction completed', {
         configName,
         duration: `${duration}ms`,
         isolationLevel: config.isolationLevel
       })
-      
+
       return result
     } catch (error) {
       const duration = Date.now() - startTime
@@ -310,7 +310,7 @@ class TransactionManager {
    * Obtiene estadísticas de uso de transacciones
    * @returns {Object} - Estadísticas de transacciones
    */
-  static getTransactionStats() {
+  static getTransactionStats () {
     // En un entorno de producción, esto podría conectarse a métricas reales
     return {
       activeConnections: sequelize.connectionManager.pool.size,

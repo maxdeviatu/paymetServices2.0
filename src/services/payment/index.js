@@ -23,7 +23,7 @@ class PaymentService {
       // payu: new PayUProvider()
     }
     this.initialized = false
-    
+
     // Registrar providers que requieren autenticación en el AuthenticationManager
     this.registerAuthProviders()
   }
@@ -32,7 +32,7 @@ class PaymentService {
    * Registra providers que requieren autenticación
    * @private
    */
-  registerAuthProviders() {
+  registerAuthProviders () {
     // Registrar providers que tienen método authenticate
     Object.entries(this.providers).forEach(([name, provider]) => {
       if (provider && typeof provider.authenticate === 'function') {

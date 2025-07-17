@@ -124,6 +124,18 @@ class WebhookService {
       // Registrar el error en la base de datos si es posible
       try {
         if (req.body) {
+          // Convertir rawBody a string para evitar errores de validación
+          let rawBodyString = ''
+          if (Buffer.isBuffer(req.body)) {
+            rawBodyString = req.body.toString('utf8')
+          } else if (typeof req.body === 'string') {
+            rawBodyString = req.body
+          } else if (typeof req.body === 'object') {
+            rawBodyString = JSON.stringify(req.body)
+          } else {
+            rawBodyString = String(req.body)
+          }
+
           const webhookEvent = {
             provider: providerName,
             type: 'unknown',
@@ -132,7 +144,7 @@ class WebhookService {
             amount: 0,
             currency: 'USD',
             rawHeaders: req.headers,
-            rawBody: req.body,
+            rawBody: rawBodyString,
             payload: {},
             errorMessage: error.message
           }
@@ -195,18 +207,119 @@ class WebhookService {
    * @returns {Promise<WebhookEvent>} - Evento registrado
    */
   async registerWebhookEvent (webhookEvent) {
+    // Validar y sanitizar datos antes de guardar
+    const sanitizedEvent = this.sanitizeWebhookEvent(webhookEvent)
+
     return await WebhookEvent.create({
-      eventId: webhookEvent.eventId,
-      provider: webhookEvent.provider,
-      externalRef: webhookEvent.externalRef,
-      eventType: webhookEvent.type,
-      status: webhookEvent.status,
-      amount: webhookEvent.amount,
-      currency: webhookEvent.currency,
-      payload: webhookEvent.payload,
-      rawHeaders: webhookEvent.rawHeaders,
-      rawBody: webhookEvent.rawBody
+      eventId: sanitizedEvent.eventId,
+      provider: sanitizedEvent.provider,
+      externalRef: sanitizedEvent.externalRef,
+      eventType: sanitizedEvent.type,
+      status: sanitizedEvent.status,
+      amount: sanitizedEvent.amount,
+      currency: sanitizedEvent.currency,
+      payload: sanitizedEvent.payload,
+      rawHeaders: sanitizedEvent.rawHeaders,
+      rawBody: sanitizedEvent.rawBody,
+      errorMessage: sanitizedEvent.errorMessage
     })
+  }
+
+  /**
+   * Sanitiza los datos del webhook antes de guardar en base de datos
+   * @param {Object} webhookEvent - Evento del webhook
+   * @returns {Object} - Evento sanitizado
+   */
+  sanitizeWebhookEvent (webhookEvent) {
+    const sanitized = {
+      eventId: this.sanitizeString(webhookEvent.eventId) || 'unknown',
+      provider: this.sanitizeString(webhookEvent.provider) || 'unknown',
+      externalRef: this.sanitizeString(webhookEvent.externalRef) || 'unknown',
+      type: this.sanitizeString(webhookEvent.type) || 'unknown',
+      status: this.sanitizeString(webhookEvent.status) || 'UNKNOWN',
+      amount: this.sanitizeNumber(webhookEvent.amount) || 0,
+      currency: this.sanitizeString(webhookEvent.currency) || 'USD',
+      payload: this.sanitizeObject(webhookEvent.payload) || {},
+      rawHeaders: this.sanitizeObject(webhookEvent.rawHeaders) || {},
+      rawBody: this.sanitizeRawBody(webhookEvent.rawBody) || '',
+      errorMessage: this.sanitizeString(webhookEvent.errorMessage) || null
+    }
+
+    return sanitized
+  }
+
+  /**
+   * Sanitiza strings
+   * @param {any} value - Valor a sanitizar
+   * @returns {string|null} - String sanitizado
+   */
+  sanitizeString (value) {
+    if (typeof value === 'string') {
+      return value.trim().substring(0, 1000) // Limitar longitud
+    }
+    if (value !== null && value !== undefined) {
+      return String(value).trim().substring(0, 1000)
+    }
+    return null
+  }
+
+  /**
+   * Sanitiza números
+   * @param {any} value - Valor a sanitizar
+   * @returns {number|null} - Número sanitizado
+   */
+  sanitizeNumber (value) {
+    if (typeof value === 'number' && !isNaN(value)) {
+      return Math.round(value)
+    }
+    if (typeof value === 'string') {
+      const parsed = parseFloat(value)
+      return !isNaN(parsed) ? Math.round(parsed) : null
+    }
+    return null
+  }
+
+  /**
+   * Sanitiza objetos
+   * @param {any} value - Valor a sanitizar
+   * @returns {Object|null} - Objeto sanitizado
+   */
+  sanitizeObject (value) {
+    if (value && typeof value === 'object') {
+      try {
+        // Convertir a JSON y back para eliminar funciones y referencias circulares
+        const jsonString = JSON.stringify(value)
+        if (jsonString.length > 50000) { // Limitar tamaño
+          return { truncated: true, size: jsonString.length }
+        }
+        return JSON.parse(jsonString)
+      } catch (error) {
+        return { error: 'Invalid object', type: typeof value }
+      }
+    }
+    return null
+  }
+
+  /**
+   * Sanitiza rawBody
+   * @param {any} value - Valor a sanitizar
+   * @returns {string} - String sanitizado
+   */
+  sanitizeRawBody (value) {
+    if (Buffer.isBuffer(value)) {
+      return value.toString('utf8').substring(0, 10000)
+    }
+    if (typeof value === 'string') {
+      return value.substring(0, 10000)
+    }
+    if (value && typeof value === 'object') {
+      try {
+        return JSON.stringify(value).substring(0, 10000)
+      } catch (error) {
+        return '[Object - cannot stringify]'
+      }
+    }
+    return String(value || '').substring(0, 10000)
   }
 
   /**

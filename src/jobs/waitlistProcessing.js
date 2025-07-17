@@ -6,7 +6,7 @@ const waitlistService = require('../services/waitlist.service')
  * Se ejecuta cada 30 segundos para procesar licencias reservadas
  */
 class WaitlistProcessingJob {
-  constructor() {
+  constructor () {
     this.name = 'waitlistProcessing'
     this.isRunning = false
   }
@@ -14,7 +14,7 @@ class WaitlistProcessingJob {
   /**
    * Ejecutar el job de procesamiento
    */
-  async execute() {
+  async execute () {
     if (this.isRunning) {
       logger.info('WaitlistProcessingJob: Already running, skipping execution')
       return { skipped: true, reason: 'Already running' }
@@ -30,10 +30,10 @@ class WaitlistProcessingJob {
 
       // Paso 1: Reservar automáticamente licencias disponibles para entradas PENDING
       const reserveResults = await this.autoReserveLicenses()
-      
+
       // Paso 2: Procesar una entrada READY_FOR_EMAIL (enviar email con control de tiempo)
       const processResults = await waitlistService.processNextReservedEntry()
-      
+
       const duration = Date.now() - startTime
       const combinedResults = {
         ...processResults,
@@ -53,7 +53,7 @@ class WaitlistProcessingJob {
       }
     } catch (error) {
       const duration = Date.now() - startTime
-      
+
       logger.logError(error, {
         operation: 'waitlistProcessing.execute',
         duration: `${duration}ms`
@@ -72,11 +72,11 @@ class WaitlistProcessingJob {
   /**
    * Reservar automáticamente licencias disponibles para entradas PENDING
    */
-  async autoReserveLicenses() {
+  async autoReserveLicenses () {
     try {
       // Obtener todos los productos que tienen entradas PENDING en la lista de espera
       const { WaitlistEntry } = require('../models')
-      
+
       const pendingProducts = await WaitlistEntry.findAll({
         where: {
           status: 'PENDING'
@@ -95,7 +95,7 @@ class WaitlistProcessingJob {
       for (const productData of pendingProducts) {
         try {
           const reserveResult = await waitlistService.reserveAvailableLicenses(productData.productRef)
-          
+
           if (reserveResult.reserved > 0) {
             logger.info(`AutoReserve: Reserved ${reserveResult.reserved} licenses for ${productData.productRef}`)
             results.totalReserved += reserveResult.reserved
@@ -129,7 +129,7 @@ class WaitlistProcessingJob {
   /**
    * Ejecutar el job manualmente (para testing)
    */
-  async run() {
+  async run () {
     logger.info(`Starting ${this.name} job...`)
     const startTime = Date.now()
 
@@ -149,7 +149,7 @@ class WaitlistProcessingJob {
   /**
    * Obtener configuración del job para el scheduler
    */
-  getCronConfig() {
+  getCronConfig () {
     return {
       name: this.name,
       cronTime: '*/30 * * * * *', // Cada 30 segundos
@@ -162,7 +162,7 @@ class WaitlistProcessingJob {
   /**
    * Verificar estado del job
    */
-  getStatus() {
+  getStatus () {
     return {
       name: this.name,
       isRunning: this.isRunning,
@@ -172,4 +172,4 @@ class WaitlistProcessingJob {
   }
 }
 
-module.exports = WaitlistProcessingJob 
+module.exports = WaitlistProcessingJob

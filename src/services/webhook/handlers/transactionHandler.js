@@ -28,6 +28,21 @@ class TransactionHandler {
         const transaction = await this.findTransaction(webhookEvent, t)
 
         if (!transaction) {
+          // Para eventos balance_credit, retornar success sin procesamiento
+          if (webhookEvent.type === 'balance_credit') {
+            logger.info('TransactionHandler: balance_credit event ignored - internal notification', {
+              externalRef: webhookEvent.externalRef,
+              provider: webhookEvent.provider,
+              amount: webhookEvent.amount
+            })
+            return {
+              success: true,
+              reason: 'balance_credit_ignored',
+              externalRef: webhookEvent.externalRef,
+              message: 'balance_credit events are internal Cobre notifications'
+            }
+          }
+
           logger.warn('TransactionHandler: Transaction not found', {
             externalRef: webhookEvent.externalRef,
             provider: webhookEvent.provider
@@ -59,7 +74,7 @@ class TransactionHandler {
 
         // Procesar lógica específica según el estado (sin bloquear la transacción principal)
         const processingPromises = []
-        
+
         if (webhookEvent.status === 'PAID' && oldStatus !== 'PAID') {
           processingPromises.push(this.handlePaymentSuccessOptimized(transaction, t))
         } else if (['FAILED', 'CANCELLED', 'EXPIRED'].includes(webhookEvent.status)) {
@@ -167,6 +182,18 @@ class TransactionHandler {
    */
   async findCobreTransaction (webhookEvent, transaction) {
     const { externalRef, type: eventType } = webhookEvent
+
+    // Filtrar eventos balance_credit que no corresponden a transacciones de usuario
+    if (eventType === 'balance_credit') {
+      logger.info('TransactionHandler: Skipping balance_credit event - internal Cobre notification', {
+        externalRef,
+        eventType,
+        status: webhookEvent.status,
+        amount: webhookEvent.amount,
+        message: 'balance_credit events are internal Cobre notifications and do not require transaction processing'
+      })
+      return null
+    }
 
     // Estrategia 1: buscar por gateway_ref (external_id)
     try {
@@ -474,7 +501,7 @@ class TransactionHandler {
     await transaction.update({
       status: webhookEvent.status,
       meta: updatedMeta
-    }, { 
+    }, {
       transaction: dbTransaction,
       fields: ['status', 'meta', 'updated_at'] // Solo actualizar campos necesarios
     })
@@ -558,7 +585,7 @@ class TransactionHandler {
       updates.push(
         order.update({
           status: 'IN_PROCESS'
-        }, { 
+        }, {
           transaction: dbTransaction,
           fields: ['status', 'updated_at']
         })
@@ -578,7 +605,7 @@ class TransactionHandler {
           // Licencia asignada exitosamente, completar la orden
           await order.update({
             status: 'COMPLETED'
-          }, { 
+          }, {
             transaction: dbTransaction,
             fields: ['status', 'updated_at']
           })
@@ -695,7 +722,7 @@ class TransactionHandler {
       if (shouldCancel) {
         await order.update({
           status: 'CANCELED'
-        }, { 
+        }, {
           transaction: dbTransaction,
           fields: ['status', 'updated_at']
         })

@@ -10,7 +10,7 @@ const TransactionManager = require('../../utils/transactionManager')
  * Maneja múltiples proveedores de facturación y coordina el proceso
  */
 class InvoiceService {
-  constructor() {
+  constructor () {
     this.providers = {
       siigo: new SiigoProvider(),
       mock: new MockProvider()
@@ -22,7 +22,7 @@ class InvoiceService {
   /**
    * Inicializa el servicio y autentica proveedores
    */
-  async initialize() {
+  async initialize () {
     if (this.initialized) return
 
     try {
@@ -53,7 +53,7 @@ class InvoiceService {
    * @param {string} providerName - Nombre del proveedor
    * @returns {Object} Instancia del proveedor
    */
-  getProvider(providerName = this.defaultProvider) {
+  getProvider (providerName = this.defaultProvider) {
     const provider = this.providers[providerName]
     if (!provider) {
       throw new Error(`Proveedor de facturación '${providerName}' no encontrado`)
@@ -67,7 +67,7 @@ class InvoiceService {
    * @param {string} providerName - Proveedor a usar
    * @returns {Promise<Object>} Factura generada
    */
-  async processTransaction(transaction, providerName = this.defaultProvider) {
+  async processTransaction (transaction, providerName = this.defaultProvider) {
     return await TransactionManager.executePaymentTransaction(async (dbTransaction) => {
       try {
         logger.info(`📄 Procesando facturación para transacción ${transaction.id}`)
@@ -136,7 +136,7 @@ class InvoiceService {
           invoiceId: invoice.id
         }, { transaction: dbTransaction })
 
-        logger.info(`✅ Factura generada exitosamente:`, {
+        logger.info('✅ Factura generada exitosamente:', {
           invoiceId: invoice.id,
           providerInvoiceId: invoice.providerInvoiceId,
           transactionId: transaction.id,
@@ -169,7 +169,7 @@ class InvoiceService {
    * @param {Object} options - Opciones de búsqueda
    * @returns {Promise<Array>} Lista de transacciones pendientes
    */
-  async findPendingTransactions(options = {}) {
+  async findPendingTransactions (options = {}) {
     try {
       const {
         limit = 50,
@@ -216,7 +216,7 @@ class InvoiceService {
    * @param {Object} options - Opciones de procesamiento
    * @returns {Promise<Object>} Resultado del procesamiento
    */
-  async processAllPendingTransactions(options = {}) {
+  async processAllPendingTransactions (options = {}) {
     try {
       const {
         providerName = this.defaultProvider,
@@ -294,7 +294,7 @@ class InvoiceService {
    * @param {Object} options - Opciones de paginación y filtros
    * @returns {Promise<Object>} Facturas paginadas
    */
-  async getAllInvoices(options = {}) {
+  async getAllInvoices (options = {}) {
     try {
       const {
         page = 1,
@@ -358,7 +358,7 @@ class InvoiceService {
    * @param {number} invoiceId - ID de la factura
    * @returns {Promise<Object>} Factura actualizada
    */
-  async updateInvoiceStatus(invoiceId) {
+  async updateInvoiceStatus (invoiceId) {
     try {
       const invoice = await Invoice.findByPk(invoiceId)
       if (!invoice) {

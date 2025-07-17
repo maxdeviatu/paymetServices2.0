@@ -12,7 +12,7 @@ class WaitlistService {
   /**
    * Agregar orden a la lista de espera
    */
-  async addToWaitlist(order, reason = 'OUT_OF_STOCK') {
+  async addToWaitlist (order, reason = 'OUT_OF_STOCK') {
     try {
       logger.logBusiness('waitlist:add', {
         orderId: order.id,
@@ -73,7 +73,7 @@ class WaitlistService {
   /**
    * Reservar licencias disponibles para lista de espera
    */
-  async reserveAvailableLicenses(productRef) {
+  async reserveAvailableLicenses (productRef) {
     try {
       logger.logBusiness('waitlist:reserve', { productRef })
 
@@ -140,7 +140,7 @@ class WaitlistService {
 
         // PASO 3: Apartar licencias como RESERVED y preparar para envío de emails
         const reservations = []
-        
+
         for (let i = 0; i < licenses.length; i++) {
           const license = licenses[i]
           const entry = waitlistEntries[i]
@@ -193,7 +193,7 @@ class WaitlistService {
    * Procesar una entrada lista para envío de email (llamado por el job)
    * Envía UN email cada vez que se ejecuta (intervalo de 30 segundos)
    */
-  async processNextReservedEntry() {
+  async processNextReservedEntry () {
     try {
       logger.logBusiness('waitlist:emailProcess.start')
 
@@ -218,7 +218,7 @@ class WaitlistService {
             association: 'license'
           }
         ],
-        order: [['priority', 'ASC']]  // FIFO - el más antiguo primero
+        order: [['priority', 'ASC']] // FIFO - el más antiguo primero
       })
 
       if (!readyEntry) {
@@ -231,7 +231,7 @@ class WaitlistService {
         await this.processWaitlistEntryWithEmail(readyEntry)
         results.processed++
         results.queued++
-        
+
         logger.logBusiness('waitlist:emailProcess.singleSuccess', {
           waitlistEntryId: readyEntry.id,
           orderId: readyEntry.orderId,
@@ -280,7 +280,7 @@ class WaitlistService {
    * Procesar una entrada individual para envío de email
    * SOLO después del envío exitoso: completa orden y vende licencia
    */
-  async processWaitlistEntryWithEmail(entry) {
+  async processWaitlistEntryWithEmail (entry) {
     try {
       // Marcar como PROCESSING
       await entry.update({ status: 'PROCESSING' })
@@ -309,7 +309,6 @@ class WaitlistService {
         customerEmail: entry.order.customer.email,
         message: 'License email sent and order completed successfully'
       })
-
     } catch (error) {
       logger.logError(error, {
         operation: 'processSingleEmailEntry',
@@ -323,7 +322,7 @@ class WaitlistService {
   /**
    * Completar orden y vender licencia SOLO después de confirmar envío de email
    */
-  async completeOrderAfterEmailSent(entry) {
+  async completeOrderAfterEmailSent (entry) {
     return await TransactionManager.executeInventoryTransaction(async (t) => {
       const { Order } = require('../models')
 
@@ -360,14 +359,10 @@ class WaitlistService {
     })
   }
 
-
-
-
-
   /**
    * Obtener métricas de la lista de espera incluyendo cola de correos
    */
-  async getWaitlistMetrics(productRef = null) {
+  async getWaitlistMetrics (productRef = null) {
     try {
       const whereClause = productRef ? { productRef } : {}
 
@@ -410,7 +405,7 @@ class WaitlistService {
   /**
    * Obtener lista de espera con filtros
    */
-  async getWaitlist(filters = {}) {
+  async getWaitlist (filters = {}) {
     try {
       const whereClause = {}
 
@@ -451,7 +446,7 @@ class WaitlistService {
   /**
    * Remover entrada de la lista de espera (con liberación de licencia)
    */
-  async removeFromWaitlist(waitlistEntryId, reason = 'MANUAL') {
+  async removeFromWaitlist (waitlistEntryId, reason = 'MANUAL') {
     try {
       logger.logBusiness('waitlist:remove', { waitlistEntryId, reason })
 
@@ -500,7 +495,6 @@ class WaitlistService {
       throw error
     }
   }
-
 }
 
-module.exports = new WaitlistService() 
+module.exports = new WaitlistService()

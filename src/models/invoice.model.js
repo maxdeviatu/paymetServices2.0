@@ -11,7 +11,7 @@ const Invoice = sequelize.define('Invoice', {
     primaryKey: true,
     autoIncrement: true
   },
-  
+
   // ID de la factura en el proveedor (Siigo)
   providerInvoiceId: {
     type: DataTypes.STRING,
@@ -19,7 +19,7 @@ const Invoice = sequelize.define('Invoice', {
     field: 'provider_invoice_id',
     comment: 'ID de la factura en el proveedor de facturación'
   },
-  
+
   // Número de la factura (número visible para el cliente)
   invoiceNumber: {
     type: DataTypes.STRING,
@@ -27,7 +27,7 @@ const Invoice = sequelize.define('Invoice', {
     field: 'invoice_number',
     comment: 'Número de la factura visible para el cliente'
   },
-  
+
   // ID de la transacción interna del sistema
   transactionId: {
     type: DataTypes.INTEGER,
@@ -35,7 +35,7 @@ const Invoice = sequelize.define('Invoice', {
     field: 'transaction_id',
     comment: 'ID de la transacción interna del sistema'
   },
-  
+
   // Proveedor de facturación utilizado
   provider: {
     type: DataTypes.ENUM('siigo', 'mock'),
@@ -43,7 +43,7 @@ const Invoice = sequelize.define('Invoice', {
     defaultValue: 'siigo',
     comment: 'Proveedor de facturación utilizado'
   },
-  
+
   // Estado del envío de email
   emailSent: {
     type: DataTypes.BOOLEAN,
@@ -52,7 +52,7 @@ const Invoice = sequelize.define('Invoice', {
     field: 'email_sent',
     comment: 'Indica si el email de la factura fue enviado'
   },
-  
+
   // Estado de aceptación por DIAN
   acceptedByDian: {
     type: DataTypes.BOOLEAN,
@@ -61,7 +61,7 @@ const Invoice = sequelize.define('Invoice', {
     field: 'accepted_by_dian',
     comment: 'Indica si la factura fue aceptada por DIAN'
   },
-  
+
   // ID del producto en el proveedor de facturación
   providerProductId: {
     type: DataTypes.STRING,
@@ -69,7 +69,7 @@ const Invoice = sequelize.define('Invoice', {
     field: 'provider_product_id',
     comment: 'ID del producto en el proveedor de facturación'
   },
-  
+
   // ID del cliente en el proveedor de facturación
   providerCustomerId: {
     type: DataTypes.STRING,
@@ -77,7 +77,7 @@ const Invoice = sequelize.define('Invoice', {
     field: 'provider_customer_id',
     comment: 'ID del cliente en el proveedor de facturación'
   },
-  
+
   // Fecha de creación de la factura en el proveedor
   providerCreatedAt: {
     type: DataTypes.DATE,
@@ -85,7 +85,7 @@ const Invoice = sequelize.define('Invoice', {
     field: 'provider_created_at',
     comment: 'Fecha de creación de la factura en el proveedor'
   },
-  
+
   // Metadatos adicionales de la factura
   metadata: {
     type: DataTypes.JSONB,
@@ -93,7 +93,7 @@ const Invoice = sequelize.define('Invoice', {
     defaultValue: {},
     comment: 'Metadatos adicionales de la factura del proveedor'
   },
-  
+
   // Mensaje de error si la facturación falló
   errorMessage: {
     type: DataTypes.TEXT,
@@ -101,7 +101,7 @@ const Invoice = sequelize.define('Invoice', {
     field: 'error_message',
     comment: 'Mensaje de error si la facturación falló'
   },
-  
+
   // Estado de la factura
   status: {
     type: DataTypes.ENUM('PENDING', 'GENERATED', 'SENT', 'ACCEPTED', 'REJECTED', 'FAILED'),

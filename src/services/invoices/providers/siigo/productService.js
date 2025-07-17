@@ -6,7 +6,7 @@ const SiigoAuthService = require('./auth')
  * Servicio para gestionar productos en Siigo
  */
 class SiigoProductService {
-  constructor() {
+  constructor () {
     this.authService = new SiigoAuthService()
     this.baseURL = process.env.SIIGO_API_URL
     this.partnerId = process.env.SIIGO_PARTNER_ID
@@ -17,7 +17,7 @@ class SiigoProductService {
    * @param {string} productCode - Código del producto a buscar
    * @returns {Promise<Object|null>} Producto encontrado o null
    */
-  async findProductByCode(productCode) {
+  async findProductByCode (productCode) {
     try {
       const trimmedCode = productCode ? productCode.trim() : ''
       logger.debug(`🔍 Buscando producto con código: "${trimmedCode}"`)
@@ -26,7 +26,7 @@ class SiigoProductService {
 
       const response = await axios.get(`${this.baseURL}/v1/products`, {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
           'Partner-Id': this.partnerId
         },
@@ -61,7 +61,7 @@ class SiigoProductService {
    * @param {string} productId - ID del producto en Siigo
    * @returns {Promise<Object|null>} Producto encontrado o null
    */
-  async getProductById(productId) {
+  async getProductById (productId) {
     try {
       logger.debug(`🔍 Obteniendo producto por ID: ${productId}`)
 
@@ -69,7 +69,7 @@ class SiigoProductService {
 
       const response = await axios.get(`${this.baseURL}/v1/products/${productId}`, {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
           'Partner-Id': this.partnerId
         }

@@ -24,7 +24,7 @@ describe('TransactionManager', () => {
     it('should execute transaction with HIGH_CONCURRENCY config', async () => {
       const mockCallback = jest.fn().mockResolvedValue('webhook-result')
       const mockTransaction = { id: 'mock-transaction' }
-      
+
       sequelize.transaction.mockImplementation(async (config, callback) => {
         expect(config.isolationLevel).toBe('READ COMMITTED')
         return await callback(mockTransaction)
@@ -40,7 +40,7 @@ describe('TransactionManager', () => {
     it('should handle errors in webhook transactions', async () => {
       const error = new Error('Webhook transaction failed')
       const mockCallback = jest.fn().mockRejectedValue(error)
-      
+
       sequelize.transaction.mockImplementation(async (config, callback) => {
         throw error
       })
@@ -54,7 +54,7 @@ describe('TransactionManager', () => {
     it('should execute transaction with CONSISTENT_WRITE config', async () => {
       const mockCallback = jest.fn().mockResolvedValue('payment-result')
       const mockTransaction = { id: 'mock-transaction' }
-      
+
       sequelize.transaction.mockImplementation(async (config, callback) => {
         expect(config.isolationLevel).toBe('REPEATABLE READ')
         return await callback(mockTransaction)
@@ -72,7 +72,7 @@ describe('TransactionManager', () => {
     it('should execute transaction with SERIALIZABLE_INVENTORY config', async () => {
       const mockCallback = jest.fn().mockResolvedValue('inventory-result')
       const mockTransaction = { id: 'mock-transaction' }
-      
+
       sequelize.transaction.mockImplementation(async (config, callback) => {
         expect(config.isolationLevel).toBe('SERIALIZABLE')
         return await callback(mockTransaction)
@@ -90,7 +90,7 @@ describe('TransactionManager', () => {
     it('should execute transaction with BULK_OPERATIONS config', async () => {
       const mockCallback = jest.fn().mockResolvedValue('bulk-result')
       const mockTransaction = { id: 'mock-transaction' }
-      
+
       sequelize.transaction.mockImplementation(async (config, callback) => {
         expect(config.isolationLevel).toBe('READ UNCOMMITTED')
         return await callback(mockTransaction)
@@ -108,7 +108,7 @@ describe('TransactionManager', () => {
     it('should execute transaction with READ_ONLY config', async () => {
       const mockCallback = jest.fn().mockResolvedValue('readonly-result')
       const mockTransaction = { id: 'mock-transaction' }
-      
+
       sequelize.transaction.mockImplementation(async (config, callback) => {
         expect(config.isolationLevel).toBe('READ COMMITTED')
         return await callback(mockTransaction)
@@ -126,7 +126,7 @@ describe('TransactionManager', () => {
     it('should execute transaction with custom config', async () => {
       const mockCallback = jest.fn().mockResolvedValue('custom-result')
       const mockTransaction = { id: 'mock-transaction' }
-      
+
       sequelize.transaction.mockImplementation(async (config, callback) => {
         expect(config.isolationLevel).toBe('READ COMMITTED')
         expect(config.timeout).toBe(5000)
@@ -146,7 +146,7 @@ describe('TransactionManager', () => {
 
     it('should throw error for unknown config name', async () => {
       const mockCallback = jest.fn()
-      
+
       await expect(TransactionManager.executeCustomTransaction(mockCallback, 'UNKNOWN_CONFIG'))
         .rejects.toThrow('Unknown transaction configuration: UNKNOWN_CONFIG')
     })

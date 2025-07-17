@@ -5,7 +5,7 @@ const logger = require('../config/logger')
  * Controlador para la gestión de facturas
  */
 class InvoicesController {
-  constructor() {
+  constructor () {
     this.invoiceService = new InvoiceService()
   }
 
@@ -14,7 +14,7 @@ class InvoicesController {
    * @param {Object} req - Request object
    * @param {Object} res - Response object
    */
-  async getAllInvoices(req, res) {
+  async getAllInvoices (req, res) {
     try {
       const {
         page = 1,
@@ -79,7 +79,7 @@ class InvoicesController {
    * @param {Object} req - Request object
    * @param {Object} res - Response object
    */
-  async getInvoiceById(req, res) {
+  async getInvoiceById (req, res) {
     try {
       const { id } = req.params
       const invoiceId = parseInt(id, 10)
@@ -133,7 +133,7 @@ class InvoicesController {
    * @param {Object} req - Request object
    * @param {Object} res - Response object
    */
-  async executeInvoicing(req, res) {
+  async executeInvoicing (req, res) {
     try {
       const {
         provider = 'siigo',
@@ -198,7 +198,7 @@ class InvoicesController {
    * @param {Object} req - Request object
    * @param {Object} res - Response object
    */
-  async updateInvoiceStatus(req, res) {
+  async updateInvoiceStatus (req, res) {
     try {
       const { id } = req.params
       const invoiceId = parseInt(id, 10)
@@ -252,7 +252,7 @@ class InvoicesController {
    * @param {Object} req - Request object
    * @param {Object} res - Response object
    */
-  async getInvoiceStats(req, res) {
+  async getInvoiceStats (req, res) {
     try {
       logger.logBusiness('invoices.getStats', {
         adminId: req.user.id

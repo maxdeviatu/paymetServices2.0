@@ -9,10 +9,10 @@ class EmailQueueController {
   /**
    * Obtener estadísticas de la cola de correos (compatibilidad)
    */
-  async getQueueStats(req, res) {
+  async getQueueStats (req, res) {
     try {
       const stats = emailQueueService.getQueueStats()
-      
+
       res.json({
         success: true,
         data: stats
@@ -34,11 +34,11 @@ class EmailQueueController {
   /**
    * Test del email queue service
    */
-  async testQueue(req, res) {
+  async testQueue (req, res) {
     try {
       const { testEmail } = req.body
       const result = await emailQueueService.testEmailQueue(testEmail)
-      
+
       logger.logBusiness('emailQueue:test.manual', {
         adminId: req.user?.id,
         testEmail: testEmail || 'default'

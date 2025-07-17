@@ -111,17 +111,17 @@ async function initializeProducts () {
       logger.info(`   Referencia: ${product.productRef}`)
       logger.info(`   Precio: ${product.price} ${product.currency}`)
       logger.info(`   Licencias totales: ${product.licenses.length}`)
-      
+
       const available = product.licenses.filter(l => l.status === 'AVAILABLE').length
       const sold = product.licenses.filter(l => l.status === 'SOLD').length
-      
+
       logger.info(`   Licencias disponibles: ${available}`)
       logger.info(`   Licencias vendidas: ${sold}`)
-      
+
       if (available === 0 && sold > 0) {
-        logger.info(`   ⚠️  PRODUCTO SIN STOCK - Ideal para probar lista de espera`)
+        logger.info('   ⚠️  PRODUCTO SIN STOCK - Ideal para probar lista de espera')
       }
-      
+
       product.licenses.forEach(license => {
         logger.info(`   - ${license.licenseKey} (${license.status})`)
       })

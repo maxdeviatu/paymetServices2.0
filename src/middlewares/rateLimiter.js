@@ -32,7 +32,7 @@ const orderCreationLimiter = rateLimit({
     const trustedIP = req.headers['x-trusted-ip'] === 'true'
     const isAuthenticated = req.headers.authorization && req.headers.authorization.startsWith('Bearer ')
     const isWhitelistedIP = process.env.WHITELISTED_IPS && process.env.WHITELISTED_IPS.split(',').includes(req.ip)
-    
+
     return trustedIP || isAuthenticated || isWhitelistedIP
   },
   handler: (req, res) => {
@@ -108,7 +108,7 @@ const generalLimiter = rateLimit({
     const trustedIP = req.headers['x-trusted-ip'] === 'true'
     const isWhitelistedIP = process.env.WHITELISTED_IPS && process.env.WHITELISTED_IPS.split(',').includes(req.ip)
     const isHealthCheck = req.path === '/health' || req.path === '/api/health'
-    
+
     return isAuthenticated || trustedIP || isWhitelistedIP || isHealthCheck
   },
   handler: (req, res) => {
@@ -166,10 +166,10 @@ const webhookLimiter = rateLimit({
   legacyHeaders: false,
   skip: (req) => {
     // Skip para IPs conocidos de proveedores de pago
-    const knownProviderIPs = process.env.PAYMENT_PROVIDER_IPS 
-      ? process.env.PAYMENT_PROVIDER_IPS.split(',') 
+    const knownProviderIPs = process.env.PAYMENT_PROVIDER_IPS
+      ? process.env.PAYMENT_PROVIDER_IPS.split(',')
       : ['54.173.144.191'] // IP conocida de Cobre
-    
+
     return knownProviderIPs.includes(req.ip)
   },
   handler: (req, res) => {

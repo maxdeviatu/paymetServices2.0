@@ -10,7 +10,7 @@ class CobreAdapter {
   constructor () {
     this.secret = config.cobre.webhook.secret
     this.provider = 'cobre'
-    
+
     // Log webhook secret configuration status for debugging
     if (!this.secret) {
       logger.warn('Cobre webhook: No webhook secret configured', {
@@ -27,11 +27,20 @@ class CobreAdapter {
 
   /**
    * Verifica la firma del webhook usando HMAC-SHA256
-   * @param {express.Request} req - Request de Express
+   * @param {Object} req - Request de Express
    * @returns {boolean} - true si la firma es válida
    */
   verifySignature (req) {
     try {
+      // Validar que el secreto esté configurado
+      if (!this.secret) {
+        logger.error('Cobre webhook: No webhook secret configured', {
+          env: process.env.NODE_ENV,
+          hasCobreWebhookSecret: !!process.env.COBRE_WEBHOOK_SECRET
+        })
+        return false
+      }
+
       // Cobre sends headers with hyphens, not underscores
       const timestamp = req.headers['event-timestamp'] || req.headers.event_timestamp
       const signature = req.headers['event-signature'] || req.headers.event_signature
@@ -40,7 +49,8 @@ class CobreAdapter {
         logger.warn('Cobre webhook: Missing timestamp or signature headers', {
           timestamp: !!timestamp,
           signature: !!signature,
-          headers: Object.keys(req.headers)
+          headers: Object.keys(req.headers),
+          allHeaders: process.env.NODE_ENV === 'development' ? req.headers : {}
         })
         return false
       }
@@ -70,16 +80,39 @@ class CobreAdapter {
         .digest('hex')
 
       // Comparación segura contra timing attacks
-      const isValid = crypto.timingSafeEqual(
-        Buffer.from(expectedSignature, 'hex'),
-        Buffer.from(signature, 'hex')
-      )
+      let isValid = false
+      try {
+        isValid = crypto.timingSafeEqual(
+          Buffer.from(expectedSignature, 'hex'),
+          Buffer.from(signature, 'hex')
+        )
+      } catch (bufferError) {
+        logger.error('Cobre webhook: Error in signature comparison', {
+          error: bufferError.message,
+          expectedLength: expectedSignature.length,
+          receivedLength: signature.length,
+          expectedSample: expectedSignature.substring(0, 16),
+          receivedSample: signature.substring(0, 16)
+        })
+        return false
+      }
 
       if (!isValid) {
         logger.warn('Cobre webhook: Invalid signature', {
           expected: expectedSignature,
           received: signature,
-          data: data.substring(0, 100) + '...'
+          data: data.substring(0, 100) + '...',
+          timestamp,
+          bodyLength: bodyString.length,
+          bodyType: typeof req.body,
+          secretLength: this.secret.length,
+          secretPreview: this.secret.substring(0, 8) + '...'
+        })
+      } else {
+        logger.debug('Cobre webhook: Signature verified successfully', {
+          timestamp,
+          bodyLength: bodyString.length,
+          signatureLength: signature.length
         })
       }
 
@@ -87,7 +120,9 @@ class CobreAdapter {
     } catch (error) {
       logger.error('Cobre webhook: Error verifying signature', {
         error: error.message,
-        stack: error.stack
+        stack: error.stack,
+        hasSecret: !!this.secret,
+        secretLength: this.secret ? this.secret.length : 0
       })
       return false
     }

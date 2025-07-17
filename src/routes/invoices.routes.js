@@ -12,8 +12,8 @@ router.use(authenticate)
  * @desc Obtener todas las facturas con paginación y filtros
  * @access READ_ONLY+
  */
-router.get('/', 
-  requireRole('READ_ONLY'), 
+router.get('/',
+  requireRole('READ_ONLY'),
   invoicesController.getAllInvoices
 )
 
@@ -22,8 +22,8 @@ router.get('/',
  * @desc Obtener estadísticas de facturación
  * @access READ_ONLY+
  */
-router.get('/stats', 
-  requireRole('READ_ONLY'), 
+router.get('/stats',
+  requireRole('READ_ONLY'),
   invoicesController.getInvoiceStats
 )
 
@@ -32,8 +32,8 @@ router.get('/stats',
  * @desc Obtener una factura específica por ID
  * @access READ_ONLY+
  */
-router.get('/:id', 
-  requireRole('READ_ONLY'), 
+router.get('/:id',
+  requireRole('READ_ONLY'),
   invoicesController.getInvoiceById
 )
 
@@ -42,8 +42,8 @@ router.get('/:id',
  * @desc Ejecutar proceso de facturación para transacciones pendientes
  * @access EDITOR+
  */
-router.post('/execute', 
-  requireRole('EDITOR'), 
+router.post('/execute',
+  requireRole('EDITOR'),
   invoicesController.executeInvoicing
 )
 
@@ -52,8 +52,8 @@ router.post('/execute',
  * @desc Actualizar estado de una factura consultando al proveedor
  * @access EDITOR+
  */
-router.put('/:id/status', 
-  requireRole('EDITOR'), 
+router.put('/:id/status',
+  requireRole('EDITOR'),
   invoicesController.updateInvoiceStatus
 )
 

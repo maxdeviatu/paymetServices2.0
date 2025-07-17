@@ -96,7 +96,7 @@ async function initializeSiigoConnection () {
 
     logger.info('🔗 Inicializando conexión con Siigo...')
     const result = await SiigoInitializer.initialize()
-    
+
     if (result.success) {
       logger.info('✅ Conexión con Siigo establecida exitosamente', {
         connected: result.status.connected,
@@ -115,7 +115,7 @@ async function initializeSiigoConnection () {
       error: error.message,
       stack: error.stack
     })
-    
+
     // No fallar el servidor por problemas con Siigo
     logger.warn('El servidor continuará sin conexión a Siigo')
   }
@@ -212,7 +212,7 @@ async function initializeServer () {
       if (process.env.NODE_ENV !== 'test') {
         jobScheduler.start()
         logger.info('Job scheduler iniciado')
-        
+
         // Iniciar servicio de cola de correos
         const emailQueueService = require('./services/emailQueue.service')
         emailQueueService.initialize()

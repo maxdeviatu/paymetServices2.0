@@ -98,4 +98,4 @@ const WaitlistEntry = sequelize.define('WaitlistEntry', {
   ]
 })
 
-module.exports = WaitlistEntry 
+module.exports = WaitlistEntry

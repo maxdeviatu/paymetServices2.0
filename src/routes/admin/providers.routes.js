@@ -14,11 +14,11 @@ router.get('/status', authenticate, async (req, res) => {
     const providers = paymentService.getAvailableProviders()
     const authStats = AuthenticationManager.getAuthenticationStats()
     const status = {}
-    
+
     for (const providerName of Object.keys(paymentService.providers)) {
       const provider = paymentService.providers[providerName]
       const authInfo = authStats.providers[providerName]
-      
+
       status[providerName] = {
         available: providers.includes(providerName),
         ready: paymentService.isProviderReady(providerName),
@@ -51,7 +51,7 @@ router.get('/status', authenticate, async (req, res) => {
 router.post('/:provider/authenticate', authenticate, requireRole('SUPER_ADMIN'), async (req, res) => {
   try {
     const { provider: providerName } = req.params
-    
+
     const provider = paymentService.providers[providerName]
     if (!provider) {
       return res.status(404).json({
@@ -68,17 +68,17 @@ router.post('/:provider/authenticate', authenticate, requireRole('SUPER_ADMIN'),
     }
 
     logger.info(`Admin-triggered re-authentication for provider: ${providerName}`)
-    
+
     // Use AuthenticationManager for thread-safe authentication
     await AuthenticationManager.getAuthenticatedProvider(providerName)
-    
+
     res.json({
       success: true,
       message: `Provider '${providerName}' authenticated successfully`,
       tokenValid: AuthenticationManager.isTokenValid(providerName)
     })
   } catch (error) {
-    logger.logError(error, { 
+    logger.logError(error, {
       operation: 'authenticateProvider',
       provider: req.params.provider
     })
@@ -95,7 +95,7 @@ router.post('/:provider/authenticate', authenticate, requireRole('SUPER_ADMIN'),
 router.post('/:provider/refresh', authenticate, requireRole('SUPER_ADMIN'), async (req, res) => {
   try {
     const { provider: providerName } = req.params
-    
+
     const provider = paymentService.providers[providerName]
     if (!provider) {
       return res.status(404).json({
@@ -112,17 +112,17 @@ router.post('/:provider/refresh', authenticate, requireRole('SUPER_ADMIN'), asyn
     }
 
     logger.info(`Admin-triggered token refresh for provider: ${providerName}`)
-    
+
     // Use AuthenticationManager for thread-safe force refresh
     await AuthenticationManager.forceRefresh(providerName)
-    
+
     res.json({
       success: true,
       message: `Provider '${providerName}' token refreshed successfully`,
       tokenValid: AuthenticationManager.isTokenValid(providerName)
     })
   } catch (error) {
-    logger.logError(error, { 
+    logger.logError(error, {
       operation: 'refreshProviderToken',
       provider: req.params.provider
     })

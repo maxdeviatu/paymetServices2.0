@@ -5,7 +5,7 @@ const logger = require('../config/logger')
  * Servicio para inicializar y verificar la conexión con Siigo al arranque
  */
 class SiigoInitializer {
-  constructor() {
+  constructor () {
     this.siigoAuth = new SiigoAuthService()
     this.isInitialized = false
     this.connectionStatus = {
@@ -20,14 +20,14 @@ class SiigoInitializer {
   /**
    * Inicializa la conexión con Siigo y verifica credenciales
    */
-  async initialize() {
+  async initialize () {
     try {
       logger.info('🔌 Inicializando conexión con Siigo...')
-      
+
       // Validar que las variables de entorno estén configuradas
       const requiredEnvVars = [
         'SIIGO_API_URL',
-        'SIIGO_USERNAME', 
+        'SIIGO_USERNAME',
         'SIIGO_ACCESS_KEY',
         'SIIGO_PARTNER_ID'
       ]
@@ -50,7 +50,7 @@ class SiigoInitializer {
       logger.info('✅ Conexión con Siigo establecida exitosamente')
       logger.info(`🔑 Token obtenido: ${this.connectionStatus.token}`)
       logger.info(`⏰ Token expira: ${this.connectionStatus.tokenExpiration?.toLocaleString('es-CO')}`)
-      
+
       return {
         success: true,
         status: this.connectionStatus
@@ -70,7 +70,7 @@ class SiigoInitializer {
       // No lanzar el error para que no detenga el arranque del servidor
       // Solo registrar el problema
       logger.warn('⚠️ El servidor continuará sin conexión a Siigo. Las facturas no podrán generarse.')
-      
+
       return {
         success: false,
         error: error.message,
@@ -82,7 +82,7 @@ class SiigoInitializer {
   /**
    * Obtiene el estado actual de la conexión
    */
-  getStatus() {
+  getStatus () {
     return {
       isInitialized: this.isInitialized,
       ...this.connectionStatus,
@@ -94,14 +94,14 @@ class SiigoInitializer {
   /**
    * Verifica si Siigo está disponible para usar
    */
-  isAvailable() {
+  isAvailable () {
     return this.isInitialized && this.connectionStatus.connected && this.siigoAuth.isTokenValid()
   }
 
   /**
    * Intenta reconectar con Siigo
    */
-  async reconnect() {
+  async reconnect () {
     logger.info('🔄 Intentando reconectar con Siigo...')
     return await this.initialize()
   }
@@ -109,7 +109,7 @@ class SiigoInitializer {
   /**
    * Obtiene información resumida para los logs de arranque
    */
-  getStartupSummary() {
+  getStartupSummary () {
     const status = this.getStatus()
     return {
       provider: 'Siigo',

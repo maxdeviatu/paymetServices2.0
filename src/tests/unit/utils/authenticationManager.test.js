@@ -14,7 +14,7 @@ describe('AuthenticationManager', () => {
   beforeEach(() => {
     // Reset manager state
     AuthenticationManager.clear()
-    
+
     // Create mock provider
     mockProvider = {
       authenticate: jest.fn(),
@@ -47,9 +47,9 @@ describe('AuthenticationManager', () => {
 
     it('should return provider if token is valid', async () => {
       mockProvider.isTokenValid.mockReturnValue(true)
-      
+
       const result = await AuthenticationManager.getAuthenticatedProvider('test')
-      
+
       expect(result).toBe(mockProvider)
       expect(mockProvider.authenticate).not.toHaveBeenCalled()
     })
@@ -59,9 +59,9 @@ describe('AuthenticationManager', () => {
       mockProvider.authenticate.mockResolvedValue('new-token')
       mockProvider.accessToken = 'new-token'
       mockProvider.tokenExpiration = new Date(Date.now() + 60000)
-      
+
       const result = await AuthenticationManager.getAuthenticatedProvider('test')
-      
+
       expect(result).toBe(mockProvider)
       expect(mockProvider.authenticate).toHaveBeenCalledTimes(1)
     })
@@ -75,19 +75,19 @@ describe('AuthenticationManager', () => {
         mockProvider.tokenExpiration = new Date(Date.now() + 60000)
         return 'new-token'
       })
-      
+
       // Start multiple concurrent requests
       const promises = [
         AuthenticationManager.getAuthenticatedProvider('test'),
         AuthenticationManager.getAuthenticatedProvider('test'),
         AuthenticationManager.getAuthenticatedProvider('test')
       ]
-      
+
       const results = await Promise.all(promises)
-      
+
       // All should return the same provider
       results.forEach(result => expect(result).toBe(mockProvider))
-      
+
       // Authentication should only be called once
       expect(mockProvider.authenticate).toHaveBeenCalledTimes(1)
     })
@@ -107,9 +107,9 @@ describe('AuthenticationManager', () => {
       mockProvider.refreshToken.mockResolvedValue('refreshed-token')
       mockProvider.accessToken = 'refreshed-token'
       mockProvider.tokenExpiration = new Date(Date.now() + 60000)
-      
+
       const result = await AuthenticationManager.forceRefresh('test')
-      
+
       expect(result).toBe(mockProvider)
       expect(mockProvider.refreshToken).toHaveBeenCalled()
       expect(mockProvider.authenticate).not.toHaveBeenCalled()
@@ -120,9 +120,9 @@ describe('AuthenticationManager', () => {
       mockProvider.authenticate.mockResolvedValue('new-token')
       mockProvider.accessToken = 'new-token'
       mockProvider.tokenExpiration = new Date(Date.now() + 60000)
-      
+
       const result = await AuthenticationManager.forceRefresh('test')
-      
+
       expect(result).toBe(mockProvider)
       expect(mockProvider.refreshToken).toHaveBeenCalled()
       expect(mockProvider.authenticate).toHaveBeenCalled()
@@ -133,9 +133,9 @@ describe('AuthenticationManager', () => {
       mockProvider.authenticate.mockResolvedValue('new-token')
       mockProvider.accessToken = 'new-token'
       mockProvider.tokenExpiration = new Date(Date.now() + 60000)
-      
+
       const result = await AuthenticationManager.forceRefresh('test')
-      
+
       expect(result).toBe(mockProvider)
       expect(mockProvider.authenticate).toHaveBeenCalled()
     })
@@ -148,36 +148,36 @@ describe('AuthenticationManager', () => {
 
     it('should use provider isTokenValid method if available', () => {
       mockProvider.isTokenValid.mockReturnValue(true)
-      
+
       const result = AuthenticationManager.isTokenValid('test')
-      
+
       expect(result).toBe(true)
       expect(mockProvider.isTokenValid).toHaveBeenCalled()
     })
 
     it('should fallback to internal state if provider method not available', () => {
       delete mockProvider.isTokenValid
-      
+
       // Update internal state manually
       const providerData = AuthenticationManager.providers.get('test')
       providerData.token = 'test-token'
       providerData.tokenExpiration = new Date(Date.now() + 60000)
-      
+
       const result = AuthenticationManager.isTokenValid('test')
-      
+
       expect(result).toBe(true)
     })
 
     it('should return false if token is expired', () => {
       delete mockProvider.isTokenValid
-      
+
       // Update internal state with expired token
       const providerData = AuthenticationManager.providers.get('test')
       providerData.token = 'test-token'
       providerData.tokenExpiration = new Date(Date.now() - 1000) // Expired
-      
+
       const result = AuthenticationManager.isTokenValid('test')
-      
+
       expect(result).toBe(false)
     })
 
@@ -191,9 +191,9 @@ describe('AuthenticationManager', () => {
     it('should return stats for all registered providers', () => {
       AuthenticationManager.registerProvider('test1', mockProvider)
       AuthenticationManager.registerProvider('test2', { ...mockProvider })
-      
+
       const stats = AuthenticationManager.getAuthenticationStats()
-      
+
       expect(stats).toHaveProperty('providers')
       expect(stats).toHaveProperty('totalProviders', 2)
       expect(stats).toHaveProperty('authenticatedProviders')
@@ -204,15 +204,15 @@ describe('AuthenticationManager', () => {
     it('should return correct authentication counts', () => {
       AuthenticationManager.registerProvider('valid', mockProvider)
       AuthenticationManager.registerProvider('invalid', { ...mockProvider, isTokenValid: () => false })
-      
+
       const validProvider = AuthenticationManager.providers.get('valid')
       validProvider.token = 'valid-token'
       validProvider.tokenExpiration = new Date(Date.now() + 60000)
-      
+
       mockProvider.isTokenValid = () => true
-      
+
       const stats = AuthenticationManager.getAuthenticationStats()
-      
+
       expect(stats.totalProviders).toBe(2)
       expect(stats.authenticatedProviders).toBe(1)
     })
@@ -226,17 +226,17 @@ describe('AuthenticationManager', () => {
     it('should rate limit authentication attempts', async () => {
       mockProvider.isTokenValid.mockReturnValue(false)
       mockProvider.authenticate.mockResolvedValue('token')
-      
+
       // First call should go through immediately
       const start = Date.now()
       await AuthenticationManager.getAuthenticatedProvider('test')
       const firstCallDuration = Date.now() - start
-      
+
       // Second call should be rate limited
       const secondStart = Date.now()
       await AuthenticationManager.getAuthenticatedProvider('test')
       const secondCallDuration = Date.now() - secondStart
-      
+
       // Second call should take longer due to rate limiting
       // (Note: This test might be flaky in CI due to timing)
       expect(firstCallDuration).toBeLessThan(100)

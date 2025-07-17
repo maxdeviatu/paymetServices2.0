@@ -14,7 +14,7 @@ const logger = require('../../config/logger')
 router.get('/status', authenticate, requireRole('SUPER_ADMIN'), async (req, res) => {
   try {
     const schedulerStatus = jobScheduler.getStatus()
-    
+
     // Obtener estado específico del job de facturas
     const invoiceJob = jobScheduler.jobs.get('invoiceProcessing')
     const invoiceJobStatus = invoiceJob ? invoiceJob.getStatus() : null
@@ -75,7 +75,7 @@ router.post('/invoice/run', authenticate, requireRole('SUPER_ADMIN'), async (req
 
     // Crear instancia temporal del job para ejecución manual
     const invoiceJob = new InvoiceProcessingJob()
-    
+
     // Ejecutar job manual
     const result = await invoiceJob.runManual({
       provider,

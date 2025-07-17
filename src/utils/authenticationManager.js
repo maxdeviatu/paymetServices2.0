@@ -5,10 +5,10 @@ const logger = require('../config/logger')
  * Resuelve race conditions y maneja tokens de forma segura para alta concurrencia
  */
 class AuthenticationManager {
-  constructor() {
+  constructor () {
     // Map de providers con sus estados de autenticación
     this.providers = new Map()
-    
+
     // Locks para prevenir race conditions por provider
     this.authLocks = new Map()
   }
@@ -18,7 +18,7 @@ class AuthenticationManager {
    * @param {string} providerName - Nombre del provider
    * @param {Object} provider - Instancia del provider
    */
-  registerProvider(providerName, provider) {
+  registerProvider (providerName, provider) {
     if (!provider.authenticate || typeof provider.authenticate !== 'function') {
       throw new Error(`Provider ${providerName} must have authenticate() method`)
     }
@@ -39,7 +39,7 @@ class AuthenticationManager {
    * @param {string} providerName - Nombre del provider
    * @returns {Promise<Object>} - Provider autenticado
    */
-  async getAuthenticatedProvider(providerName) {
+  async getAuthenticatedProvider (providerName) {
     const providerData = this.providers.get(providerName)
     if (!providerData) {
       throw new Error(`Provider ${providerName} not registered`)
@@ -67,9 +67,9 @@ class AuthenticationManager {
    * @returns {Promise<Object>} - Provider autenticado
    * @private
    */
-  async authenticateProvider(providerName) {
+  async authenticateProvider (providerName) {
     const providerData = this.providers.get(providerName)
-    
+
     // Double-check locking pattern para evitar race conditions
     if (this.isTokenValid(providerName)) {
       return providerData.instance
@@ -77,7 +77,7 @@ class AuthenticationManager {
 
     // Crear promise de autenticación para que otros requests esperen
     providerData.authPromise = this.performAuthentication(providerName)
-    
+
     try {
       await providerData.authPromise
       return providerData.instance
@@ -93,7 +93,7 @@ class AuthenticationManager {
    * @returns {Promise<void>}
    * @private
    */
-  async performAuthentication(providerName) {
+  async performAuthentication (providerName) {
     const providerData = this.providers.get(providerName)
     const startTime = Date.now()
 
@@ -101,8 +101,8 @@ class AuthenticationManager {
       logger.info(`AuthenticationManager: Starting authentication for ${providerName}`)
 
       // Prevenir spam de autenticación (rate limiting)
-      const timeSinceLastAttempt = providerData.lastAuthAttempt 
-        ? Date.now() - providerData.lastAuthAttempt 
+      const timeSinceLastAttempt = providerData.lastAuthAttempt
+        ? Date.now() - providerData.lastAuthAttempt
         : Infinity
 
       if (timeSinceLastAttempt < 5000) { // 5 segundos mínimo entre intentos
@@ -123,7 +123,6 @@ class AuthenticationManager {
         duration: `${duration}ms`,
         tokenExpiration: providerData.tokenExpiration?.toISOString()
       })
-
     } catch (error) {
       const duration = Date.now() - startTime
       logger.error(`AuthenticationManager: Authentication failed for ${providerName}`, {
@@ -141,7 +140,7 @@ class AuthenticationManager {
    * @param {any} authResult - Resultado de la autenticación
    * @private
    */
-  updateProviderToken(providerName, authResult) {
+  updateProviderToken (providerName, authResult) {
     const providerData = this.providers.get(providerName)
     const provider = providerData.instance
 
@@ -172,7 +171,7 @@ class AuthenticationManager {
    * @param {string} providerName - Nombre del provider
    * @returns {boolean} - true si el token es válido
    */
-  isTokenValid(providerName) {
+  isTokenValid (providerName) {
     const providerData = this.providers.get(providerName)
     if (!providerData) return false
 
@@ -183,8 +182,8 @@ class AuthenticationManager {
     }
 
     // Fallback: verificar usando nuestro estado interno
-    return providerData.token && 
-           providerData.tokenExpiration && 
+    return providerData.token &&
+           providerData.tokenExpiration &&
            providerData.tokenExpiration > new Date()
   }
 
@@ -193,7 +192,7 @@ class AuthenticationManager {
    * @param {string} providerName - Nombre del provider
    * @returns {Promise<Object>} - Provider con token renovado
    */
-  async forceRefresh(providerName) {
+  async forceRefresh (providerName) {
     const providerData = this.providers.get(providerName)
     if (!providerData) {
       throw new Error(`Provider ${providerName} not registered`)
@@ -224,9 +223,9 @@ class AuthenticationManager {
    * Obtiene estadísticas de autenticación
    * @returns {Object} - Estadísticas de todos los providers
    */
-  getAuthenticationStats() {
+  getAuthenticationStats () {
     const stats = {}
-    
+
     for (const [providerName, providerData] of this.providers) {
       stats[providerName] = {
         hasToken: !!providerData.token,
@@ -248,7 +247,7 @@ class AuthenticationManager {
    * Limpia el estado de autenticación (útil para testing)
    * @param {string} providerName - Nombre del provider (opcional)
    */
-  clear(providerName = null) {
+  clear (providerName = null) {
     if (providerName) {
       const providerData = this.providers.get(providerName)
       if (providerData) {

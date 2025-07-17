@@ -6,7 +6,7 @@ const logger = require('../../../../config/logger')
  * Maneja la obtención y gestión de tokens de acceso
  */
 class SiigoAuthService {
-  constructor() {
+  constructor () {
     this.accessToken = null
     this.tokenExpiration = null
     this.baseURL = process.env.SIIGO_API_URL
@@ -18,10 +18,10 @@ class SiigoAuthService {
   /**
    * Autentica con Siigo y obtiene un token de acceso
    */
-  async authenticate() {
+  async authenticate () {
     try {
       logger.info('🔐 Iniciando autenticación con Siigo...')
-      
+
       const payload = {
         username: this.username,
         access_key: this.accessKey?.replace(/"/g, '')
@@ -55,14 +55,14 @@ class SiigoAuthService {
   /**
    * Verifica si el token actual es válido
    */
-  isTokenValid() {
+  isTokenValid () {
     return this.accessToken && this.tokenExpiration && this.tokenExpiration > new Date()
   }
 
   /**
    * Obtiene el token de acceso actual o solicita uno nuevo si es necesario
    */
-  async getAccessToken() {
+  async getAccessToken () {
     if (!this.isTokenValid()) {
       logger.info('🔄 Token inválido o expirado, re-autenticando...')
       await this.authenticate()
@@ -73,7 +73,7 @@ class SiigoAuthService {
   /**
    * Force refresh del token
    */
-  async refreshToken() {
+  async refreshToken () {
     logger.info('🔄 Forzando refresh del token de Siigo...')
     this.accessToken = null
     this.tokenExpiration = null

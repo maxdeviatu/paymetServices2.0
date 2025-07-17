@@ -21,4 +21,4 @@ router.delete('/:waitlistEntryId', requireRole('EDITOR'), ctrl.removeFromWaitlis
 router.get('/job/status', requireRole('SUPER_ADMIN'), ctrl.getJobStatus)
 router.post('/job/run', requireRole('SUPER_ADMIN'), ctrl.runJob)
 
-module.exports = router 
+module.exports = router
