@@ -35,7 +35,10 @@ app.use(cors({
   credentials: false
 }))
 
-// Body parsing middleware
+// Mount webhook routes BEFORE body parsing to preserve raw body
+app.use('/api/webhooks', require('./routes/webhook.routes'))
+
+// Body parsing middleware for all other routes
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
@@ -167,14 +170,14 @@ async function initializeCobreWebhookSubscription () {
 async function initializeServer () {
   try {
     // 1. VALIDAR VARIABLES DE ENTORNO ANTES QUE NADA
-    console.log('\n🔧 Iniciando validación de configuración...')
+    logger.info('🔧 Iniciando validación de configuración...')
     const envValidator = new EnvironmentValidator()
     const validationResult = envValidator.validate()
 
     if (!validationResult.isValid) {
-      console.log('\n❌ CONFIGURACIÓN INVÁLIDA - No se puede iniciar el servidor')
+      logger.error('❌ CONFIGURACIÓN INVÁLIDA - No se puede iniciar el servidor')
       envValidator.printDetailedReport(validationResult.report)
-      console.log('\n📖 Consulta VARIABLES_ENTORNO.md y .env.example para más información')
+      logger.info('📖 Consulta VARIABLES_ENTORNO.md y .env.example para más información')
       process.exit(1)
     }
 
@@ -235,7 +238,7 @@ async function initializeServer () {
         })
     })
   } catch (error) {
-    console.error('Failed to initialize server:', error)
+    logger.error('Failed to initialize server:', error)
     process.exit(1)
   }
 }

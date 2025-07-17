@@ -4,20 +4,46 @@ const webhookController = require('../controllers/webhook.controller')
 const { authenticate } = require('../middlewares/auth')
 const { requireRole } = require('../middlewares/role')
 const { webhookLimiter } = require('../middlewares/rateLimiter')
-const { securityHeaders, logPublicRequest, sanitizeInput } = require('../middlewares/security')
+const { securityHeaders, logPublicRequest } = require('../middlewares/security')
 
 // Apply security middleware to all webhook routes
 router.use(securityHeaders)
 router.use(logPublicRequest)
 router.use(webhookLimiter)
 
-// Webhook-specific middleware that preserves raw body
-const webhookMiddleware = (req, res, next) => {
-  // Store original raw body before any processing
-  req.originalRawBody = req.body
+// Custom raw body middleware for webhooks with size limit
+const captureRawBody = (req, res, next) => {
+  const MAX_BODY_SIZE = 10 * 1024 * 1024 // 10MB limit
+  let rawBody = Buffer.alloc(0)
+  let totalSize = 0
   
-  // Basic validation without sanitization
-  if (!req.body || req.body.length === 0) {
+  req.on('data', (chunk) => {
+    totalSize += chunk.length
+    
+    if (totalSize > MAX_BODY_SIZE) {
+      const error = new Error('Webhook payload too large')
+      error.status = 413
+      return next(error)
+    }
+    
+    rawBody = Buffer.concat([rawBody, chunk])
+  })
+  
+  req.on('end', () => {
+    req.rawBody = rawBody
+    req.body = rawBody // Keep as Buffer for express.raw compatibility
+    next()
+  })
+  
+  req.on('error', (err) => {
+    next(err)
+  })
+}
+
+// Webhook validation middleware
+const webhookMiddleware = (req, res, next) => {
+  // Basic validation
+  if (!req.rawBody || req.rawBody.length === 0) {
     return res.status(400).json({
       success: false,
       message: 'Empty webhook body'
@@ -37,9 +63,9 @@ const webhookMiddleware = (req, res, next) => {
 }
 
 // Endpoint principal of webhooks (no authentication required - verified by signature)
-// Use express.raw() to preserve the original body for signature validation
+// Use custom raw body capture to preserve exact bytes for signature verification
 router.post('/:provider',
-  express.raw({ type: 'application/json', limit: '10mb' }),
+  captureRawBody,
   webhookMiddleware,
   webhookController.handleWebhook.bind(webhookController)
 )
