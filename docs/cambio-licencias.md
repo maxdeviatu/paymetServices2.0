@@ -104,6 +104,356 @@ Authorization: Bearer {admin_token}
 | 400 | `No se puede cambiar a la misma referencia de producto` | Intento de cambio al mismo producto |
 | 400 | `El producto actual XXX no existe` | El producto actual no existe en el sistema |
 
+## Ejemplo de Uso con Postman
+
+### Configuración Inicial
+
+#### 1. Crear una Nueva Colección
+1. Abrir Postman
+2. Crear nueva colección llamada "Sistema de Cambio de Licencias"
+3. Agregar variables de entorno:
+   - `base_url`: `https://api.innovatelearning.com.co` (o tu URL de desarrollo)
+   - `admin_token`: Token de autenticación de administrador con rol `SUPER_ADMIN`
+
+#### 2. Configurar Variables de Entorno
+```json
+{
+  "base_url": "https://api.innovatelearning.com.co",
+  "admin_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "test_license_key": "AAA-BBB-CCC-111",
+  "test_document_number": "12345678",
+  "test_new_product": "SOFT-PRO-2Y"
+}
+```
+
+### Request de Cambio de Licencia
+
+#### Configuración del Request
+- **Método**: `POST`
+- **URL**: `{{base_url}}/api/license-change/change`
+- **Headers**:
+  ```
+  Content-Type: application/json
+  Authorization: Bearer {{admin_token}}
+  ```
+
+#### Body del Request
+```json
+{
+  "licenseKey": "{{test_license_key}}",
+  "customerDocumentNumber": "{{test_document_number}}",
+  "newProductRef": "{{test_new_product}}"
+}
+```
+
+### Casos de Prueba
+
+#### Caso 1: Cambio Exitoso
+**Request:**
+```json
+{
+  "licenseKey": "AAA-BBB-CCC-111",
+  "customerDocumentNumber": "12345678",
+  "newProductRef": "SOFT-PRO-2Y"
+}
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Licencia cambiada exitosamente",
+  "data": {
+    "changeInfo": {
+      "changedAt": "2025-01-14T10:30:00.000Z",
+      "oldProductName": "Software Pro 1 Año",
+      "newProductName": "Software Pro 2 Años"
+    },
+    "customer": {
+      "id": 1,
+      "name": "Juan Pérez",
+      "email": "juan@example.com"
+    },
+    "order": {
+      "id": 123,
+      "productRef": "SOFT-PRO-2Y"
+    },
+    "licenses": {
+      "old": {
+        "licenseKey": "AAA-BBB-CCC-111",
+        "productRef": "SOFT-PRO-1Y",
+        "status": "AVAILABLE"
+      },
+      "new": {
+        "licenseKey": "DDD-EEE-FFF-222",
+        "productRef": "SOFT-PRO-2Y",
+        "status": "SOLD"
+      }
+    }
+  }
+}
+```
+
+#### Caso 2: Licencia No Encontrada
+**Request:**
+```json
+{
+  "licenseKey": "XXX-YYY-ZZZ-999",
+  "customerDocumentNumber": "12345678",
+  "newProductRef": "SOFT-PRO-2Y"
+}
+```
+
+**Response (404):**
+```json
+{
+  "success": false,
+  "message": "Licencia no encontrada"
+}
+```
+
+#### Caso 3: Documento No Coincide
+**Request:**
+```json
+{
+  "licenseKey": "AAA-BBB-CCC-111",
+  "customerDocumentNumber": "87654321",
+  "newProductRef": "SOFT-PRO-2Y"
+}
+```
+
+**Response (404):**
+```json
+{
+  "success": false,
+  "message": "El número de documento no coincide con el propietario de la licencia"
+}
+```
+
+#### Caso 4: Producto No Encontrado
+**Request:**
+```json
+{
+  "licenseKey": "AAA-BBB-CCC-111",
+  "customerDocumentNumber": "12345678",
+  "newProductRef": "PRODUCTO-INEXISTENTE"
+}
+```
+
+**Response (404):**
+```json
+{
+  "success": false,
+  "message": "Producto con referencia PRODUCTO-INEXISTENTE no encontrado"
+}
+```
+
+#### Caso 5: Precios Diferentes
+**Request:**
+```json
+{
+  "licenseKey": "AAA-BBB-CCC-111",
+  "customerDocumentNumber": "12345678",
+  "newProductRef": "SOFT-PREMIUM-2Y"
+}
+```
+
+**Response (400):**
+```json
+{
+  "success": false,
+  "message": "Los precios no coinciden. Producto actual: 99900, Nuevo producto: 199900"
+}
+```
+
+#### Caso 6: Sin Stock Disponible
+**Request:**
+```json
+{
+  "licenseKey": "AAA-BBB-CCC-111",
+  "customerDocumentNumber": "12345678",
+  "newProductRef": "SOFT-PRO-2Y"
+}
+```
+
+**Response (400):**
+```json
+{
+  "success": false,
+  "message": "No hay licencias disponibles para el producto SOFT-PRO-2Y"
+}
+```
+
+#### Caso 7: Campos Requeridos Faltantes
+**Request:**
+```json
+{
+  "licenseKey": "AAA-BBB-CCC-111"
+}
+```
+
+**Response (400):**
+```json
+{
+  "success": false,
+  "message": "customerDocumentNumber es requerido"
+}
+```
+
+### Scripts de Postman
+
+#### Pre-request Script (Validación de Token)
+```javascript
+// Verificar que el token esté configurado
+if (!pm.environment.get("admin_token")) {
+    throw new Error("Token de administrador no configurado");
+}
+
+// Verificar que la URL base esté configurada
+if (!pm.environment.get("base_url")) {
+    throw new Error("URL base no configurada");
+}
+```
+
+#### Tests Script (Validaciones Automáticas)
+```javascript
+// Verificar que la respuesta sea JSON válido
+pm.test("Response is JSON", function () {
+    pm.response.to.have.jsonBody();
+});
+
+// Verificar código de estado
+pm.test("Status code is 200", function () {
+    pm.response.to.have.status(200);
+});
+
+// Verificar estructura de respuesta exitosa
+if (pm.response.code === 200) {
+    pm.test("Success response structure", function () {
+        const jsonData = pm.response.json();
+        pm.expect(jsonData).to.have.property('success', true);
+        pm.expect(jsonData).to.have.property('message');
+        pm.expect(jsonData).to.have.property('data');
+        pm.expect(jsonData.data).to.have.property('changeInfo');
+        pm.expect(jsonData.data).to.have.property('customer');
+        pm.expect(jsonData.data).to.have.property('order');
+        pm.expect(jsonData.data).to.have.property('licenses');
+    });
+
+    pm.test("License change details", function () {
+        const jsonData = pm.response.json();
+        pm.expect(jsonData.data.licenses.old.status).to.eql('AVAILABLE');
+        pm.expect(jsonData.data.licenses.new.status).to.eql('SOLD');
+        pm.expect(jsonData.data.order.productRef).to.eql(pm.request.body.newProductRef);
+    });
+}
+
+// Verificar errores
+if (pm.response.code >= 400) {
+    pm.test("Error response structure", function () {
+        const jsonData = pm.response.json();
+        pm.expect(jsonData).to.have.property('success', false);
+        pm.expect(jsonData).to.have.property('message');
+    });
+}
+
+// Guardar datos para uso posterior
+if (pm.response.code === 200) {
+    const jsonData = pm.response.json();
+    pm.environment.set("last_change_id", jsonData.data.order.id);
+    pm.environment.set("new_license_key", jsonData.data.licenses.new.licenseKey);
+}
+```
+
+### Colección Completa de Postman
+
+#### Estructura de la Colección
+```
+📁 Sistema de Cambio de Licencias
+├── 🔧 Setup
+│   ├── 🔑 Obtener Token Admin
+│   └── 📋 Configurar Variables
+├── ✅ Casos Exitosos
+│   ├── 🔄 Cambio de Licencia Básico
+│   └── 🔄 Cambio con Validaciones
+├── ❌ Casos de Error
+│   ├── 🚫 Licencia No Encontrada
+│   ├── 🚫 Documento No Coincide
+│   ├── 🚫 Producto No Existe
+│   ├── 🚫 Precios Diferentes
+│   ├── 🚫 Sin Stock Disponible
+│   └── 🚫 Campos Requeridos Faltantes
+└── 🔍 Verificaciones
+    ├── 📧 Verificar Email Enviado
+    └── 📊 Verificar Logs
+```
+
+#### Variables de Entorno Recomendadas
+```json
+{
+  "base_url": "https://api.innovatelearning.com.co",
+  "admin_token": "",
+  "test_license_key": "AAA-BBB-CCC-111",
+  "test_document_number": "12345678",
+  "test_new_product": "SOFT-PRO-2Y",
+  "last_change_id": "",
+  "new_license_key": "",
+  "customer_email": "juan@example.com"
+}
+```
+
+### Comandos de Terminal para Testing
+
+#### Ejecutar Tests Unitarios
+```bash
+# Ejecutar todos los tests del servicio
+npm test -- src/tests/unit/services/licenseChange.service.test.js
+
+# Ejecutar tests con coverage
+npm test -- --coverage src/tests/unit/services/licenseChange.service.test.js
+
+# Ejecutar tests en modo watch
+npm test -- --watch src/tests/unit/services/licenseChange.service.test.js
+```
+
+#### Verificar Logs del Sistema
+```bash
+# Ver logs de cambios de licencia
+tail -f logs/app.log | grep "licenseChange"
+
+# Ver logs de emails enviados
+tail -f logs/app.log | grep "email:licenseChange"
+
+# Ver logs de errores
+tail -f logs/app.log | grep "ERROR"
+```
+
+### Checklist de Testing
+
+#### ✅ Configuración
+- [ ] Token de administrador válido configurado
+- [ ] Variables de entorno configuradas
+- [ ] URL base correcta
+- [ ] Headers de autorización configurados
+
+#### ✅ Casos de Prueba
+- [ ] Cambio exitoso con datos válidos
+- [ ] Validación de licencia no encontrada
+- [ ] Validación de documento no coincidente
+- [ ] Validación de producto inexistente
+- [ ] Validación de precios diferentes
+- [ ] Validación de stock insuficiente
+- [ ] Validación de campos requeridos
+- [ ] Validación de formato de datos
+
+#### ✅ Verificaciones Post-Cambio
+- [ ] Email enviado al cliente
+- [ ] Logs de auditoría generados
+- [ ] Licencia anterior liberada
+- [ ] Nueva licencia asignada
+- [ ] Orden actualizada
+- [ ] Información de envío actualizada
+
 ## Validaciones del Sistema
 
 ### 1. Validación de Licencia
