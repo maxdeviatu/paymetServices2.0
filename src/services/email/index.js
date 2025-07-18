@@ -105,6 +105,65 @@ class EmailService {
       throw error
     }
   }
+
+  /**
+   * Send license change notification email
+   */
+  async sendLicenseChangeEmail ({ customer, oldProduct, newProduct, oldLicense, newLicense, order }) {
+    try {
+      logger.logBusiness('email:licenseChange.start', {
+        orderId: order.id,
+        customerId: customer.id,
+        oldLicenseId: oldLicense.id,
+        newLicenseId: newLicense.id,
+        oldProductRef: oldLicense.productRef,
+        newProductRef: newLicense.productRef,
+        customerEmail: customer.email
+      })
+
+      const result = await sendEmail({
+        to: {
+          email: customer.email,
+          name: customer.name
+        },
+        subject: `Cambio de Producto - Tu nueva licencia está lista`,
+        templateName: 'license-change',
+        variables: {
+          customerName: customer.name,
+          oldProductName: oldProduct.name,
+          newProductName: newProduct.name,
+          oldLicenseKey: oldLicense.licenseKey,
+          newLicenseKey: newLicense.licenseKey,
+          instructions: newLicense.instructions || null,
+          orderId: order.id,
+          changeDate: new Date().toLocaleDateString('es-CO'),
+          supportEmail: 'administrativo@innovatelearning.com.co',
+          whatsappLink: 'https://wa.link/b6dl4y'
+        }
+      })
+
+      logger.logBusiness('email:licenseChange.success', {
+        orderId: order.id,
+        customerId: customer.id,
+        oldLicenseId: oldLicense.id,
+        newLicenseId: newLicense.id,
+        customerEmail: customer.email,
+        messageId: result.messageId,
+        success: result.success
+      })
+
+      return result
+    } catch (error) {
+      logger.logError(error, {
+        operation: 'sendLicenseChangeEmail',
+        orderId: order.id,
+        customerId: customer.id,
+        oldLicenseId: oldLicense.id,
+        newLicenseId: newLicense.id
+      })
+      throw error
+    }
+  }
 }
 
 module.exports = new EmailService()
