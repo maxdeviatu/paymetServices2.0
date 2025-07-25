@@ -248,6 +248,76 @@ COBRE_WEBHOOK_URL=https://tu-dominio.com/webhooks/cobre
 
 ---
 
+## 🔄 Configuración de ePayco
+
+### `EPAYCO_PUBLIC_KEY`
+- **Descripción**: Clave pública de ePayco para autenticación
+- **Tipo**: String
+- **Requerido**: ✅ Sí
+- **Ejemplo**: `EPAYCO_PUBLIC_KEY=efe1a4d2c3b7e8f9a0b1c2d3e4f5a6b7`
+- **Dónde obtener**: Dashboard de ePayco → Configuración → API Keys
+
+### `EPAYCO_PRIVATE_KEY`
+- **Descripción**: Clave privada de ePayco para autenticación
+- **Tipo**: String
+- **Requerido**: ✅ Sí
+- **Ejemplo**: `EPAYCO_PRIVATE_KEY=sk_test_1234567890abcdef`
+- **Dónde obtener**: Dashboard de ePayco → Configuración → API Keys
+- **⚠️ IMPORTANTE**: Mantener en secreto, nunca exponer en frontend
+
+### `EPAYCO_P_KEY`
+- **Descripción**: P_KEY de ePayco para verificación de webhooks
+- **Tipo**: String
+- **Requerido**: ✅ Sí
+- **Ejemplo**: `EPAYCO_P_KEY=abc123def456ghi789`
+- **Dónde obtener**: Dashboard de ePayco → Configuración → P_KEY
+
+### `EPAYCO_P_CUST_ID_CLIENTE`
+- **Descripción**: ID de cliente ePayco
+- **Tipo**: String
+- **Requerido**: ✅ Sí
+- **Ejemplo**: `EPAYCO_P_CUST_ID_CLIENTE=12345`
+- **Dónde obtener**: Dashboard de ePayco → Configuración → Cliente ID
+
+### `EPAYCO_TEST`
+- **Descripción**: Modo de prueba de ePayco
+- **Tipo**: Boolean (true/false)
+- **Por defecto**: `true`
+- **Ejemplo**: `EPAYCO_TEST=true`
+- **Notas**: 
+  - `true`: Pagos de prueba (sin cargo real)
+  - `false`: Pagos reales en producción
+
+### `EPAYCO_RESPONSE_URL`
+- **Descripción**: URL donde ePayco redirigirá después del pago
+- **Tipo**: URL
+- **Requerido**: ✅ Sí
+- **Ejemplo**: `EPAYCO_RESPONSE_URL=https://innovatelearning.com.co/tienda/pago-finalizado`
+- **Notas**: URL pública donde el usuario verá el resultado del pago
+
+### `EPAYCO_CONFIRMATION_URL`
+- **Descripción**: URL donde ePayco enviará confirmaciones de pago (webhook)
+- **Tipo**: URL (debe ser HTTPS)
+- **Requerido**: ✅ Sí
+- **Ejemplo**: `EPAYCO_CONFIRMATION_URL=https://tu-dominio.com/webhooks/epayco`
+- **Cómo configurar**:
+
+#### Para Desarrollo Local:
+```bash
+# Usando ngrok
+ngrok http 3000
+# Copiar URL HTTPS: https://abc123.ngrok.io
+
+EPAYCO_CONFIRMATION_URL=https://abc123.ngrok.io/webhooks/epayco
+```
+
+#### Para Producción:
+```bash
+EPAYCO_CONFIRMATION_URL=https://tu-dominio.com/webhooks/epayco
+```
+
+---
+
 ## 🌐 Configuración de Aplicación
 
 ### `COMPANY_NAME`

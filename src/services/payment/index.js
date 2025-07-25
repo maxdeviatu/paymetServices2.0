@@ -8,7 +8,7 @@ const AuthenticationManager = require('../../utils/authenticationManager')
 // Payment providers
 const MockProvider = require('./providers/mock')
 const CobreProvider = require('./providers/cobre')
-// const EPaycoProvider = require('./providers/epayco')
+const EPaycoProvider = require('./providers/epayco')
 // const PayUProvider = require('./providers/payu')
 
 /**
@@ -18,8 +18,8 @@ class PaymentService {
   constructor () {
     this.providers = {
       mock: new MockProvider(),
-      cobre: CobreProvider
-      // epayco: new EPaycoProvider(),
+      cobre: CobreProvider,
+      epayco: new EPaycoProvider()
       // payu: new PayUProvider()
     }
     this.initialized = false
@@ -195,6 +195,34 @@ class PaymentService {
           transaction: t
         })
 
+        // Get customer data for ePayco
+        let customer = null
+        if (options.provider === 'epayco') {
+          if (options.customer) {
+            // Use customer data from request (frontend form)
+            customer = options.customer
+            logger.logBusiness('payment:customer.fromRequest', {
+              orderId,
+              hasCustomerData: true,
+              customerEmail: customer.email,
+              customerName: `${customer.firstName} ${customer.lastName}`,
+              documentType: customer.documentType,
+              documentNumber: customer.documentNumber
+            })
+          } else {
+            // Fallback: load from database
+            const { User } = require('../../models')
+            customer = await User.findByPk(order.customerId, {
+              transaction: t
+            })
+            logger.logBusiness('payment:customer.fromDatabase', {
+              orderId,
+              customerId: order.customerId,
+              hasCustomerData: !!customer
+            })
+          }
+        }
+
         // Get existing transactions separately
         const existingTransactions = await Transaction.findAll({
           where: {
@@ -232,7 +260,17 @@ class PaymentService {
         const provider = await this.getProvider(transaction.gateway)
 
         // Create payment intent with provider
-        const intentResult = await provider.createIntent({ order, transaction, product })
+        const intentResult = await provider.createIntent({ order, transaction, product, customer })
+
+        logger.logBusiness('payment:intentResult.debug', {
+          orderId: order.id,
+          provider: transaction.gateway,
+          hasIntentResult: !!intentResult,
+          intentKeys: intentResult ? Object.keys(intentResult) : [],
+          hasMeta: !!intentResult?.meta,
+          metaKeys: intentResult?.meta ? Object.keys(intentResult.meta) : [],
+          gatewayRef: intentResult?.gatewayRef
+        })
 
         // Update transaction with gateway reference
         await transaction.update({
@@ -274,7 +312,8 @@ class PaymentService {
           redirectUrl: intentResult.redirectUrl,
           provider: transaction.gateway,
           amount: transaction.amount,
-          currency: transaction.currency
+          currency: transaction.currency,
+          meta: intentResult.meta // ✅ Include meta data in return
         }
       })
     } catch (error) {

@@ -38,6 +38,9 @@ app.use(cors({
 // Mount webhook routes BEFORE body parsing to preserve raw body
 app.use('/api/webhooks', require('./routes/webhook.routes'))
 
+// Mount external webhook routes (for providers that expect specific URLs)
+app.use('/webhooks', require('./routes/webhook.routes'))
+
 // Body parsing middleware for all other routes
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))

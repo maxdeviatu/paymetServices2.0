@@ -41,25 +41,38 @@ exports.createOrder = async (req, res) => {
       shippingInfo
     })
 
-    // If provider is cobre, create payment intent automatically
+    // If provider is cobre or epayco, create payment intent automatically
     let paymentIntent = null
-    if (provider === 'cobre') {
+    if (provider === 'cobre' || provider === 'epayco') {
       logger.logBusiness('order:attempting.checkout', {
         orderId: result.order.id,
         provider,
-        message: 'Attempting to create checkout for Cobre'
+        message: `Attempting to create checkout for ${provider}`
       })
 
       try {
         paymentIntent = await paymentService.createPaymentIntent(result.order.id, {
-          provider
+          provider,
+          customer: customer // ✅ Pass customer data to PaymentService
         })
 
         logger.logBusiness('order:checkout.created', {
           orderId: result.order.id,
           transactionId: paymentIntent.transactionId,
           checkoutUrl: paymentIntent.redirectUrl,
-          gatewayRef: paymentIntent.gatewayRef
+          gatewayRef: paymentIntent.gatewayRef,
+          provider
+        })
+        
+        // Debug: Log what PaymentService returned
+        logger.logBusiness('order:paymentIntent.received', {
+          orderId: result.order.id,
+          provider,
+          hasPaymentIntent: !!paymentIntent,
+          paymentIntentKeys: paymentIntent ? Object.keys(paymentIntent) : [],
+          hasMeta: paymentIntent ? !!paymentIntent.meta : false,
+          metaType: paymentIntent && paymentIntent.meta ? typeof paymentIntent.meta : 'undefined',
+          metaContent: paymentIntent ? paymentIntent.meta : null
         })
       } catch (paymentError) {
         logger.logError(paymentError, {
@@ -101,9 +114,34 @@ exports.createOrder = async (req, res) => {
       transaction: transactionData
     }
 
-    // Add payment URL if checkout was created
+    // Add payment URL if checkout was created (Cobre)
     if (paymentIntent && paymentIntent.redirectUrl) {
       responseData.transaction.paymentUrl = paymentIntent.redirectUrl
+    }
+
+    // Add ePayco-specific data for frontend
+    if (paymentIntent && provider === 'epayco' && paymentIntent.meta) {
+      responseData.epayco = {
+        publicKey: paymentIntent.meta.publicKey,
+        test: paymentIntent.meta.test,
+        checkoutData: paymentIntent.meta.epaycoData
+      }
+      
+      logger.logBusiness('order:epayco.response.prepared', {
+        orderId: result.order.id,
+        hasEpaycoData: !!responseData.epayco,
+        publicKeyExists: !!paymentIntent.meta.publicKey,
+        testMode: paymentIntent.meta.test,
+        checkoutDataExists: !!paymentIntent.meta.epaycoData
+      })
+    } else if (provider === 'epayco') {
+      logger.logBusiness('order:epayco.data.missing', {
+        orderId: result.order.id,
+        hasPaymentIntent: !!paymentIntent,
+        provider,
+        metaExists: paymentIntent ? !!paymentIntent.meta : false,
+        metaContent: paymentIntent ? paymentIntent.meta : null
+      })
     }
 
     res.status(201).json({
@@ -192,9 +230,13 @@ exports.getOrderById = async (req, res) => {
         customer: includeCustomer
           ? {
               id: order.customer.id,
-              firstName: order.customer.firstName,
-              lastName: order.customer.lastName,
-              email: order.customer.email
+              firstName: order.customer.first_name,
+              lastName: order.customer.last_name,
+              email: order.customer.email,
+              phone: order.customer.phone,
+              documentType: order.customer.document_type,
+              documentNumber: order.customer.document_number,
+              birthDate: order.customer.birth_date
             }
           : undefined,
         product: {
@@ -390,8 +432,8 @@ exports.getAllOrders = async (req, res) => {
         customerId: order.customerId,
         customer: {
           id: order.customer.id,
-          firstName: order.customer.firstName,
-          lastName: order.customer.lastName,
+          firstName: order.customer.first_name,
+          lastName: order.customer.last_name,
           email: order.customer.email
         },
         productRef: order.productRef,

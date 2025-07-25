@@ -5,6 +5,7 @@ const { authenticate } = require('../middlewares/auth')
 const { requireRole } = require('../middlewares/role')
 const { webhookLimiter } = require('../middlewares/rateLimiter')
 const { securityHeaders, logPublicRequest } = require('../middlewares/security')
+const logger = require('../config/logger')
 
 // Apply security middleware to all webhook routes
 router.use(securityHeaders)
@@ -31,7 +32,38 @@ const captureRawBody = (req, res, next) => {
   
   req.on('end', () => {
     req.rawBody = rawBody
-    req.body = rawBody // Keep as Buffer for express.raw compatibility
+    
+    // Parse body based on content type
+    const contentType = req.get('Content-Type')
+    const provider = req.params.provider
+    
+    if (provider === 'epayco') {
+      // ePayco sends form-urlencoded data, parse it
+      try {
+        const formData = rawBody.toString('utf8')
+        const parsedBody = {}
+        
+        // Parse form-urlencoded data
+        formData.split('&').forEach(pair => {
+          const [key, value] = pair.split('=')
+          if (key && value !== undefined) {
+            parsedBody[decodeURIComponent(key)] = decodeURIComponent(value)
+          }
+        })
+        
+        req.body = parsedBody
+      } catch (error) {
+        logger.error('Error parsing ePayco form data', {
+          error: error.message,
+          rawBody: rawBody.toString('utf8')
+        })
+        req.body = {}
+      }
+    } else {
+      // Other providers send JSON
+      req.body = rawBody // Keep as Buffer for express.raw compatibility
+    }
+    
     next()
   })
   
@@ -50,13 +82,27 @@ const webhookMiddleware = (req, res, next) => {
     })
   }
   
-  // Validate Content-Type
+  // Validate Content-Type - ePayco sends form-urlencoded, others send JSON
   const contentType = req.get('Content-Type')
-  if (!contentType || !contentType.includes('application/json')) {
-    return res.status(400).json({
-      success: false,
-      message: 'Invalid Content-Type, expected application/json'
-    })
+  const provider = req.params.provider
+  
+  if (provider === 'epayco') {
+    // ePayco sends form-urlencoded data
+    if (!contentType || !contentType.includes('application/x-www-form-urlencoded')) {
+      logger.warn('EPayco webhook: Unexpected Content-Type', {
+        contentType,
+        expected: 'application/x-www-form-urlencoded'
+      })
+      // Continue anyway, as some ePayco webhooks might use different content types
+    }
+  } else {
+    // Other providers send JSON
+    if (!contentType || !contentType.includes('application/json')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid Content-Type, expected application/json'
+      })
+    }
   }
   
   next()

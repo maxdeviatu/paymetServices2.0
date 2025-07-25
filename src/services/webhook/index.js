@@ -4,6 +4,7 @@ const logger = require('../../config/logger')
 // Importar adaptadores de proveedores
 const CobreAdapter = require('./providers/cobre')
 const MockAdapter = require('./providers/mock')
+const EPaycoAdapter = require('./providers/epayco')
 
 // Importar handlers
 const transactionHandler = require('./handlers/transactionHandler')
@@ -17,7 +18,8 @@ class WebhookService {
     // Registro de adaptadores de proveedores
     this.providerRegistry = {
       cobre: new CobreAdapter(),
-      mock: new MockAdapter()
+      mock: new MockAdapter(),
+      epayco: new EPaycoAdapter()
     }
 
     // Registro de handlers por tipo de evento
