@@ -528,7 +528,7 @@ class TransactionHandler {
 
         // Enviar email de licencia ANTES de completar la orden
         try {
-          await this.sendLicenseEmail(order, transaction)
+          await this.sendLicenseEmail(order, transaction, licenseResult?.license)
           
           // Solo completar la orden si el email se envió exitosamente
           await order.update({
@@ -618,7 +618,7 @@ class TransactionHandler {
           })
           
           try {
-            const emailResult = await this.sendLicenseEmail(order, transaction)
+            const emailResult = await this.sendLicenseEmail(order, transaction, licenseResult.license)
             
             logger.info('TransactionHandler: sendLicenseEmail completed (optimized)', {
               orderId: order.id,
@@ -856,24 +856,32 @@ class TransactionHandler {
    * Envía email con licencia
    * @param {Order} order - Orden
    * @param {Transaction} transaction - Transacción
+   * @param {License} providedLicense - Licencia ya reservada (opcional)
    */
-  async sendLicenseEmail (order, transaction) {
+  async sendLicenseEmail (order, transaction, providedLicense = null) {
     logger.info('TransactionHandler: sendLicenseEmail method called', {
       orderId: order.id,
-      transactionId: transaction.id
+      transactionId: transaction.id,
+      hasProvidedLicense: !!providedLicense,
+      providedLicenseId: providedLicense?.id
     })
     
     const emailService = require('../../email')
-    const { License } = require('../../../models')
+    let license = providedLicense
 
-    const license = await License.findOne({
-      where: { orderId: order.id }
-    })
+    // Si no se proporciona la licencia, buscarla en la base de datos
+    if (!license) {
+      const { License } = require('../../../models')
+      license = await License.findOne({
+        where: { orderId: order.id }
+      })
+    }
 
     logger.info('TransactionHandler: License found for email', {
       orderId: order.id,
       licenseId: license?.id,
-      licenseKey: license?.licenseKey
+      licenseKey: license?.licenseKey,
+      source: providedLicense ? 'provided' : 'database'
     })
 
     if (license) {
