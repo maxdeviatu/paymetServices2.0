@@ -878,12 +878,27 @@ class TransactionHandler {
 
     if (license) {
       try {
+        logger.info('TransactionHandler: About to call emailService.sendLicenseEmail', {
+          orderId: order.id,
+          customerEmail: order.customer.email,
+          licenseId: license.id,
+          licenseKey: license.licenseKey
+        })
+
         // Enviar email
         const emailResult = await emailService.sendLicenseEmail({
           customer: order.customer,
           product: order.product,
           license,
           order
+        })
+
+        logger.info('TransactionHandler: emailService.sendLicenseEmail returned', {
+          orderId: order.id,
+          emailResult: emailResult,
+          resultType: typeof emailResult,
+          success: emailResult?.success,
+          messageId: emailResult?.messageId
         })
 
         // Si el email se envió exitosamente, actualizar shippingInfo
@@ -911,12 +926,19 @@ class TransactionHandler {
             messageId: emailResult.messageId,
             shippingInfoUpdated: true
           })
+        } else {
+          logger.warn('TransactionHandler: Email result indicates failure or no success flag', {
+            orderId: order.id,
+            emailResult: emailResult,
+            success: emailResult?.success
+          })
         }
 
         return emailResult
       } catch (emailError) {
         logger.error('TransactionHandler: Error sending license email', {
           error: emailError.message,
+          stack: emailError.stack,
           orderId: order.id,
           customerEmail: order.customer.email
         })
@@ -940,6 +962,18 @@ class TransactionHandler {
         })
 
         throw emailError
+      }
+    } else {
+      logger.error('TransactionHandler: No license found for order', {
+        orderId: order.id,
+        productRef: order.productRef,
+        message: 'Cannot send license email without license'
+      })
+      
+      return {
+        success: false,
+        error: 'No license found for order',
+        orderId: order.id
       }
     }
   }

@@ -24,6 +24,13 @@ class EmailService {
         customerEmail: customer.email
       })
 
+      logger.info('EmailService: About to call sendEmail from brevoService', {
+        orderId: order.id,
+        to: customer.email,
+        templateName: 'license-delivery',
+        licenseKey: license.licenseKey
+      })
+
       const result = await sendEmail({
         to: {
           email: customer.email,
@@ -43,6 +50,14 @@ class EmailService {
         }
       })
 
+      logger.info('EmailService: sendEmail returned from brevoService', {
+        orderId: order.id,
+        result: result,
+        resultType: typeof result,
+        success: result?.success,
+        messageId: result?.messageId
+      })
+
       logger.logBusiness('email:license.success', {
         orderId: order.id,
         customerId: customer.id,
@@ -54,6 +69,15 @@ class EmailService {
 
       return result
     } catch (error) {
+      logger.error('EmailService: Error in sendLicenseEmail', {
+        error: error.message,
+        stack: error.stack,
+        operation: 'sendLicenseEmail',
+        orderId: order.id,
+        customerId: customer.id,
+        licenseId: license.id,
+        customerEmail: customer.email
+      })
       logger.logError(error, {
         operation: 'sendLicenseEmail',
         orderId: order.id,
