@@ -1,4 +1,4 @@
-const { Order, License, sequelize } = require('../models')
+const { Order, License } = require('../models')
 const { Op } = require('sequelize')
 const logger = require('../config/logger')
 const TransactionManager = require('../utils/transactionManager')
@@ -23,11 +23,30 @@ class EmailRetryJob {
         retryIntervalMinutes: this.retryIntervalMinutes
       })
 
-      // Find orders that are COMPLETED but don't have email info in shippingInfo
-      const ordersWithoutEmail = await Order.findAll({
+      // Find orders with failed emails or missing email info
+      const ordersWithFailedEmail = await Order.findAll({
         where: {
-          status: 'COMPLETED',
-          shippingInfo: null // No email information
+          [Op.or]: [
+            // Orders IN_PROCESS with failed email attempts
+            {
+              status: 'IN_PROCESS',
+              [Op.or]: [
+                { shippingInfo: null },
+                {
+                  shippingInfo: {
+                    email: {
+                      sent: false
+                    }
+                  }
+                }
+              ]
+            },
+            // Orders COMPLETED but without email info (legacy cases)
+            {
+              status: 'COMPLETED',
+              shippingInfo: null
+            }
+          ]
         },
         include: [
           {
@@ -37,13 +56,18 @@ class EmailRetryJob {
           {
             association: 'product',
             required: true
+          },
+          {
+            association: 'transactions',
+            where: { status: 'PAID' },
+            required: true
           }
         ]
       })
 
       // Filter orders that have sold licenses
       const ordersWithLicenses = []
-      for (const order of ordersWithoutEmail) {
+      for (const order of ordersWithFailedEmail) {
         const license = await License.findOne({
           where: {
             orderId: order.id,
@@ -112,60 +136,81 @@ class EmailRetryJob {
    * Retry email for a single order
    */
   async retryEmailForOrder (order) {
-    try {
-      logger.logBusiness('emailRetry:processing', {
-        orderId: order.id,
-        customerEmail: order.customer.email,
-        productRef: order.product.productRef
-      })
+    return await TransactionManager.executeWebhookTransaction(async (dbTransaction) => {
+      try {
+        logger.logBusiness('emailRetry:processing', {
+          orderId: order.id,
+          customerEmail: order.customer.email,
+          productRef: order.product.productRef,
+          currentStatus: order.status
+        })
 
-      // Get the sold license for this order
-      const license = order.licenses.find(l => l.status === 'SOLD')
-      if (!license) {
-        throw new Error('No sold license found for order')
-      }
-
-      // Import the email service
-      const emailService = require('../services/email')
-      const transactionHandler = require('../services/webhook/handlers/transactionHandler')
-
-      // Try to send the license email
-      await transactionHandler.sendLicenseEmail(order, { id: 'retry' })
-
-      logger.logBusiness('emailRetry:success', {
-        orderId: order.id,
-        customerEmail: order.customer.email,
-        licenseId: license.id
-      })
-
-      return { success: true }
-    } catch (error) {
-      logger.logError(error, {
-        operation: 'emailRetry.retryEmail',
-        orderId: order.id,
-        customerEmail: order.customer?.email
-      })
-
-      // Update shipping info with retry attempt
-      const currentShippingInfo = order.shippingInfo || {}
-      const updatedShippingInfo = {
-        ...currentShippingInfo,
-        email: {
-          sent: false,
-          attemptedAt: new Date().toISOString(),
-          error: error.message,
-          recipient: order.customer?.email,
-          type: 'license_delivery',
-          retryAttempt: (currentShippingInfo.email?.retryAttempt || 0) + 1
+        // Get the sold license for this order
+        const license = order.licenses.find(l => l.status === 'SOLD')
+        if (!license) {
+          throw new Error('No sold license found for order')
         }
+
+        // Import the transaction handler
+        const transactionHandler = require('../services/webhook/handlers/transactionHandler')
+
+        // Try to send the license email with database transaction
+        const emailResult = await transactionHandler.sendLicenseEmail(
+          order, 
+          { id: 'retry' }, 
+          license, 
+          dbTransaction
+        )
+
+        // If email was successful and order is IN_PROCESS, complete it
+        if (emailResult && emailResult.success && order.status === 'IN_PROCESS') {
+          await order.update({
+            status: 'COMPLETED'
+          }, { transaction: dbTransaction })
+
+          logger.logBusiness('emailRetry:orderCompleted', {
+            orderId: order.id,
+            previousStatus: 'IN_PROCESS',
+            newStatus: 'COMPLETED'
+          })
+        }
+
+        logger.logBusiness('emailRetry:success', {
+          orderId: order.id,
+          customerEmail: order.customer.email,
+          licenseId: license.id,
+          orderCompleted: order.status === 'IN_PROCESS'
+        })
+
+        return { success: true, orderCompleted: order.status === 'IN_PROCESS' }
+      } catch (error) {
+        logger.logError(error, {
+          operation: 'emailRetry.retryEmail',
+          orderId: order.id,
+          customerEmail: order.customer?.email
+        })
+
+        // Update shipping info with retry attempt
+        const currentShippingInfo = order.shippingInfo || {}
+        const updatedShippingInfo = {
+          ...currentShippingInfo,
+          email: {
+            sent: false,
+            attemptedAt: new Date().toISOString(),
+            error: error.message,
+            recipient: order.customer?.email,
+            type: 'license_delivery',
+            retryAttempt: (currentShippingInfo.email?.retryAttempt || 0) + 1
+          }
+        }
+
+        await order.update({
+          shippingInfo: updatedShippingInfo
+        }, { transaction: dbTransaction })
+
+        return { success: false, error: error.message }
       }
-
-      await order.update({
-        shippingInfo: updatedShippingInfo
-      })
-
-      return { success: false, error: error.message }
-    }
+    })
   }
 
   /**

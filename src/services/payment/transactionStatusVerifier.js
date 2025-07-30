@@ -423,9 +423,17 @@ class TransactionStatusVerifier {
         throw new Error(`Orden ${orderId} no encontrada`)
       }
 
-      // Verificar que la orden esté completada
-      if (order.status !== 'COMPLETED') {
-        throw new Error(`La orden ${orderId} no está completada (estado actual: ${order.status})`)
+      // Verificar que la orden esté completada o en proceso con pago exitoso
+      if (order.status !== 'COMPLETED' && order.status !== 'IN_PROCESS') {
+        throw new Error(`La orden ${orderId} no está en estado válido para reenvío de email (estado actual: ${order.status})`)
+      }
+
+      // Si está en IN_PROCESS, verificar que tenga al menos una transacción pagada
+      if (order.status === 'IN_PROCESS') {
+        const hasPaidTransaction = order.transactions && order.transactions.some(t => t.status === 'PAID')
+        if (!hasPaidTransaction) {
+          throw new Error(`La orden ${orderId} está en proceso pero no tiene transacciones pagadas`)
+        }
       }
 
       // Buscar la licencia asociada a la orden
@@ -494,9 +502,22 @@ class TransactionStatusVerifier {
         }
       }
 
-      await order.update({
+      // Preparar las actualizaciones de la orden
+      const orderUpdates = {
         shippingInfo: updatedShippingInfo
-      })
+      }
+
+      // Si la orden estaba en IN_PROCESS y el email se envió exitosamente, completarla
+      if (order.status === 'IN_PROCESS' && emailResult && emailResult.success) {
+        orderUpdates.status = 'COMPLETED'
+        logger.logBusiness('transaction:statusVerification.emailVerification.orderCompleted', {
+          orderId,
+          previousStatus: 'IN_PROCESS',
+          newStatus: 'COMPLETED'
+        })
+      }
+
+      await order.update(orderUpdates)
 
       logger.logBusiness('transaction:statusVerification.emailVerification.resent', {
         orderId,
@@ -507,14 +528,17 @@ class TransactionStatusVerifier {
 
       return {
         success: true,
-        message: 'Email reenviado exitosamente',
+        message: orderUpdates.status === 'COMPLETED' 
+          ? 'Email reenviado exitosamente y orden completada' 
+          : 'Email reenviado exitosamente',
         orderId: order.id,
         emailSent: true,
         sentAt: updatedShippingInfo.email.sentAt,
         messageId: emailResult.messageId,
         recipient: order.customer.email,
         resent: true,
-        previousAttempt: emailInfo || null
+        previousAttempt: emailInfo || null,
+        orderCompleted: orderUpdates.status === 'COMPLETED'
       }
     } catch (error) {
       logger.logError(error, {
