@@ -528,7 +528,7 @@ class TransactionHandler {
 
         // Enviar email de licencia ANTES de completar la orden
         try {
-          await this.sendLicenseEmail(order, transaction, licenseResult?.license)
+          await this.sendLicenseEmail(order, transaction, licenseResult?.license, dbTransaction)
           
           // Solo completar la orden si el email se envió exitosamente
           await order.update({
@@ -618,7 +618,7 @@ class TransactionHandler {
           })
           
           try {
-            const emailResult = await this.sendLicenseEmail(order, transaction, licenseResult.license)
+            const emailResult = await this.sendLicenseEmail(order, transaction, licenseResult.license, dbTransaction)
             
             logger.info('TransactionHandler: sendLicenseEmail completed (optimized)', {
               orderId: order.id,
@@ -857,8 +857,9 @@ class TransactionHandler {
    * @param {Order} order - Orden
    * @param {Transaction} transaction - Transacción
    * @param {License} providedLicense - Licencia ya reservada (opcional)
+   * @param {Object} dbTransaction - Transacción de base de datos (opcional)
    */
-  async sendLicenseEmail (order, transaction, providedLicense = null) {
+  async sendLicenseEmail (order, transaction, providedLicense = null, dbTransaction = null) {
     logger.info('TransactionHandler: sendLicenseEmail method called', {
       orderId: order.id,
       transactionId: transaction.id,
@@ -926,7 +927,7 @@ class TransactionHandler {
           // Actualizar la orden con la información del email enviado
           await order.update({
             shippingInfo: updatedShippingInfo
-          })
+          }, dbTransaction ? { transaction: dbTransaction } : {})
 
           logger.info('TransactionHandler: Email sent and shippingInfo updated', {
             orderId: order.id,
@@ -967,7 +968,7 @@ class TransactionHandler {
         // Actualizar la orden con la información del intento fallido
         await order.update({
           shippingInfo: updatedShippingInfo
-        })
+        }, dbTransaction ? { transaction: dbTransaction } : {})
 
         throw emailError
       }
