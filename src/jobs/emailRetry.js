@@ -1,0 +1,189 @@
+const { Order, License, sequelize } = require('../models')
+const { Op } = require('sequelize')
+const logger = require('../config/logger')
+const TransactionManager = require('../utils/transactionManager')
+
+/**
+ * Email retry job - retries failed license emails for completed orders
+ */
+class EmailRetryJob {
+  constructor () {
+    this.name = 'emailRetry'
+    this.maxRetries = 3
+    this.retryIntervalMinutes = 15 // Reintentar cada 15 minutos
+  }
+
+  /**
+   * Execute the email retry job
+   */
+  async execute () {
+    try {
+      logger.logBusiness('job:emailRetry.start', {
+        maxRetries: this.maxRetries,
+        retryIntervalMinutes: this.retryIntervalMinutes
+      })
+
+      // Find orders that are COMPLETED but don't have email info in shippingInfo
+      const ordersWithoutEmail = await Order.findAll({
+        where: {
+          status: 'COMPLETED',
+          shippingInfo: null // No email information
+        },
+        include: [
+          {
+            association: 'licenses',
+            where: {
+              status: 'SOLD'
+            },
+            required: true
+          },
+          {
+            association: 'customer',
+            required: true
+          },
+          {
+            association: 'product',
+            required: true
+          }
+        ]
+      })
+
+      if (ordersWithoutEmail.length === 0) {
+        logger.logBusiness('job:emailRetry.noOrders', {
+          checkedAt: new Date()
+        })
+        return { processed: 0, message: 'No orders without email found' }
+      }
+
+      let processedCount = 0
+      let successCount = 0
+      const errors = []
+
+      // Process each order without email
+      for (const order of ordersWithoutEmail) {
+        try {
+          const result = await this.retryEmailForOrder(order)
+          processedCount++
+          if (result.success) {
+            successCount++
+          }
+        } catch (error) {
+          logger.logError(error, {
+            operation: 'emailRetry.processOrder',
+            orderId: order.id
+          })
+          errors.push({
+            orderId: order.id,
+            error: error.message
+          })
+        }
+      }
+
+      logger.logBusiness('job:emailRetry.completed', {
+        totalOrders: ordersWithoutEmail.length,
+        processed: processedCount,
+        success: successCount,
+        errors: errors.length
+      })
+
+      return {
+        processed: processedCount,
+        success: successCount,
+        total: ordersWithoutEmail.length,
+        errors
+      }
+    } catch (error) {
+      logger.logError(error, {
+        operation: 'emailRetry.execute'
+      })
+      throw error
+    }
+  }
+
+  /**
+   * Retry email for a single order
+   */
+  async retryEmailForOrder (order) {
+    try {
+      logger.logBusiness('emailRetry:processing', {
+        orderId: order.id,
+        customerEmail: order.customer.email,
+        productRef: order.product.productRef
+      })
+
+      // Get the sold license for this order
+      const license = order.licenses.find(l => l.status === 'SOLD')
+      if (!license) {
+        throw new Error('No sold license found for order')
+      }
+
+      // Import the email service
+      const emailService = require('../services/email')
+      const transactionHandler = require('../services/webhook/handlers/transactionHandler')
+
+      // Try to send the license email
+      await transactionHandler.sendLicenseEmail(order, { id: 'retry' })
+
+      logger.logBusiness('emailRetry:success', {
+        orderId: order.id,
+        customerEmail: order.customer.email,
+        licenseId: license.id
+      })
+
+      return { success: true }
+    } catch (error) {
+      logger.logError(error, {
+        operation: 'emailRetry.retryEmail',
+        orderId: order.id,
+        customerEmail: order.customer?.email
+      })
+
+      // Update shipping info with retry attempt
+      const currentShippingInfo = order.shippingInfo || {}
+      const updatedShippingInfo = {
+        ...currentShippingInfo,
+        email: {
+          sent: false,
+          attemptedAt: new Date().toISOString(),
+          error: error.message,
+          recipient: order.customer?.email,
+          type: 'license_delivery',
+          retryAttempt: (currentShippingInfo.email?.retryAttempt || 0) + 1
+        }
+      }
+
+      await order.update({
+        shippingInfo: updatedShippingInfo
+      })
+
+      return { success: false, error: error.message }
+    }
+  }
+
+  /**
+   * Run the job (for manual execution)
+   */
+  async run () {
+    try {
+      logger.info('EmailRetryJob: Starting manual execution')
+      const result = await this.execute()
+      logger.info('EmailRetryJob: Manual execution completed', result)
+      return result
+    } catch (error) {
+      logger.error('EmailRetryJob: Manual execution failed', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get cron configuration for this job
+   */
+  getCronConfig () {
+    return {
+      interval: `${this.retryIntervalMinutes} * * * *`, // Every 15 minutes
+      timezone: 'America/Bogota'
+    }
+  }
+}
+
+module.exports = EmailRetryJob 

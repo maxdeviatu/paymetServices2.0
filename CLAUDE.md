@@ -25,6 +25,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Additional Development Commands
 - `npm run env:validate` - Validate environment configuration
 - `npm run webhook:setup` - Create webhook events table
+- `npm run create-invoices-table` - Create invoices table for billing system
 - `npm run cobre:subscribe` - Bootstrap Cobre subscription setup
 - `npm run cobre:test` - Test Cobre connection
 - `npm run webhook:test` - Test webhook with mock data
@@ -83,9 +84,11 @@ The project uses Winston with custom logging methods:
 
 ### Testing Setup
 - Jest with Supertest for API testing
-- Test setup file: `src/tests/setup.js`
+- Test setup file: `src/tests/setup.js` (includes global mocks and 10s timeout)
 - Mocks for logger and mailer in `src/tests/__mocks__/`
-- Tests organized by layer: controllers, services, middlewares
+- Tests organized by layer: controllers, services, middlewares, utils
+- Run specific test: `npm test -- --testPathPattern=<pattern>`
+- Run tests with file watch: `npm run test:watch`
 
 ### Scripts
 - `src/scripts/createSuperAdmin.js` - Creates initial super admin user
@@ -137,6 +140,10 @@ The licenses module manages digital license inventory for products with full CRU
   - OAuth2 authentication with token refresh
   - 24-hour checkout expiration
   - Full webhook integration with HMAC-SHA256 signature verification
+- **ePayco** - Alternative Colombian payment gateway
+  - Checkout page integration with public/private key authentication
+  - Configurable test/production mode
+  - Webhook confirmation URL support
 - **Mock** - Testing provider for development
 
 ### Transaction Flow
@@ -276,9 +283,14 @@ Stock Added → License Reserved → Processing Job → License SOLD → Email Q
 - `JWT_SECRET` (minimum 32 characters)
 - `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD`
 
-**Required for payment processing:**
+**Required for payment processing (Cobre):**
 - `COBRE_USER_ID`, `COBRE_SECRET`, `COBRE_BASE_URL`
 - `COBRE_WEBHOOK_URL`, `COBRE_WEBHOOK_SECRET`
+
+**Required for payment processing (ePayco):**
+- `EPAYCO_PUBLIC_KEY`, `EPAYCO_PRIVATE_KEY`, `EPAYCO_P_KEY`
+- `EPAYCO_P_CUST_ID_CLIENTE`, `EPAYCO_RESPONSE_URL`, `EPAYCO_CONFIRMATION_URL`
+- `EPAYCO_TEST=true/false` - Test mode toggle
 
 **Required for invoicing:**
 - `SIIGO_API_URL`, `SIIGO_USERNAME`, `SIIGO_ACCESS_KEY`, `SIIGO_PARTNER_ID`

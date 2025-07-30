@@ -521,26 +521,34 @@ class TransactionHandler {
         status: 'IN_PROCESS'
       }, { transaction: dbTransaction })
 
-      // Si es producto digital con licencia, completar inmediatamente
+      // Si es producto digital con licencia, manejar licencia y email
       if (order.product && order.product.license_type) {
-        await this.reserveLicenseForOrder(order, dbTransaction)
+        // Reservar licencia (confirma que el pago fue exitoso)
+        const licenseResult = await this.reserveLicenseForOrder(order, dbTransaction)
 
-        // Completar la orden
-        await order.update({
-          status: 'COMPLETED'
-        }, { transaction: dbTransaction })
+        // Enviar email de licencia ANTES de completar la orden
+        try {
+          await this.sendLicenseEmail(order, transaction)
+          
+          // Solo completar la orden si el email se envió exitosamente
+          await order.update({
+            status: 'COMPLETED'
+          }, { transaction: dbTransaction })
 
-        // Enviar email de licencia de forma asíncrona
-        setImmediate(async () => {
-          try {
-            await this.sendLicenseEmail(order, transaction)
-          } catch (emailError) {
-            logger.error('TransactionHandler: Error sending license email', {
-              error: emailError.message,
-              orderId: order.id
-            })
-          }
-        })
+          logger.info('TransactionHandler: License email sent and order completed', {
+            orderId: order.id,
+            transactionId: transaction.id,
+            licenseReserved: !!licenseResult
+          })
+        } catch (emailError) {
+          // Si el email falla, mantener la orden en IN_PROCESS
+          logger.error('TransactionHandler: Email failed, order kept in IN_PROCESS', {
+            error: emailError.message,
+            orderId: order.id,
+            transactionId: transaction.id
+          })
+          // NO completar la orden - se reintentará después
+        }
       }
 
       // Enviar email de confirmación
@@ -602,23 +610,32 @@ class TransactionHandler {
         const licenseResult = results.find(result => result && (result.license || result.waitlisted))
 
         if (licenseResult?.license) {
-          // Licencia asignada exitosamente, completar la orden
-          await order.update({
-            status: 'COMPLETED'
-          }, {
-            transaction: dbTransaction,
-            fields: ['status', 'updated_at']
-          })
-
-          // Programar envío de email de licencia de forma asíncrona
-          setImmediate(() => {
-            this.sendLicenseEmail(order, transaction).catch(error => {
-              logger.error('TransactionHandler: Error sending license email', {
-                error: error.message,
-                orderId: order.id
-              })
+          // Licencia asignada exitosamente, enviar email ANTES de completar orden
+          try {
+            await this.sendLicenseEmail(order, transaction)
+            
+            // Solo completar la orden si el email se envió exitosamente
+            await order.update({
+              status: 'COMPLETED'
+            }, {
+              transaction: dbTransaction,
+              fields: ['status', 'updated_at']
             })
-          })
+
+            logger.info('TransactionHandler: License email sent and order completed (optimized)', {
+              orderId: order.id,
+              transactionId: transaction.id,
+              licenseReserved: true
+            })
+          } catch (emailError) {
+            // Si el email falla, mantener la orden en IN_PROCESS
+            logger.error('TransactionHandler: Email failed, order kept in IN_PROCESS (optimized)', {
+              error: emailError.message,
+              orderId: order.id,
+              transactionId: transaction.id
+            })
+            // NO completar la orden - se reintentará después
+          }
         } else if (licenseResult?.waitlisted) {
           // Agregado a lista de espera, mantener orden en IN_PROCESS
           logger.info('TransactionHandler: Order added to waitlist', {

@@ -2,6 +2,7 @@ const logger = require('../config/logger')
 const OrderTimeoutJob = require('./orderTimeout')
 const WaitlistProcessingJob = require('./waitlistProcessing')
 const InvoiceProcessingJob = require('./invoiceProcessing')
+const EmailRetryJob = require('./emailRetry')
 
 /**
  * Simple job scheduler for background tasks
@@ -47,16 +48,26 @@ class JobScheduler {
     // Siempre registrar waitlist job para permitir ejecución manual
     this.registerJob(WaitlistProcessingJob)
 
+    // Registrar email retry job
+    this.registerJob(EmailRetryJob)
+
     if (process.env.ENABLE_WAITLIST_PROCESSING === 'true') {
       logger.info('✅ Waitlist processing job habilitado para ejecución automática')
     } else {
       logger.info('⏸️  Waitlist processing job registrado pero pausado (ENABLE_WAITLIST_PROCESSING=false)')
     }
 
+    if (process.env.ENABLE_EMAIL_RETRY === 'true') {
+      logger.info('✅ Email retry job habilitado para ejecución automática')
+    } else {
+      logger.info('⏸️  Email retry job registrado pero pausado (ENABLE_EMAIL_RETRY=false)')
+    }
+
     // Start each job based on its schedule
     for (const [name, job] of this.jobs) {
-      // Solo iniciar automáticamente si está habilitado o no es waitlist
-      if (name === 'waitlistProcessing' && process.env.ENABLE_WAITLIST_PROCESSING !== 'true') {
+      // Solo iniciar automáticamente si está habilitado o no es waitlist/emailRetry
+      if ((name === 'waitlistProcessing' && process.env.ENABLE_WAITLIST_PROCESSING !== 'true') ||
+          (name === 'emailRetry' && process.env.ENABLE_EMAIL_RETRY !== 'true')) {
         logger.info(`Job ${name} registrado pero no iniciado automáticamente`)
         continue
       }
@@ -86,6 +97,9 @@ class JobScheduler {
           break
         case 'waitlistProcessing':
           intervalMs = 30 * 1000 // 30 seconds
+          break
+        case 'emailRetry':
+          intervalMs = 15 * 60 * 1000 // 15 minutes
           break
         case 'invoiceProcessing':
           intervalMs = 60 * 60 * 1000 // 1 hour (check if should run)

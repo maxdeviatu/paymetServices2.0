@@ -4,6 +4,7 @@ const { authenticate } = require('../../middlewares/auth')
 const { requireRole } = require('../../middlewares/role')
 const jobScheduler = require('../../jobs/scheduler')
 const InvoiceProcessingJob = require('../../jobs/invoiceProcessing')
+const EmailRetryJob = require('../../jobs/emailRetry')
 const logger = require('../../config/logger')
 
 /**
@@ -117,7 +118,7 @@ router.post('/:jobName/start', authenticate, requireRole('SUPER_ADMIN'), async (
   try {
     const { jobName } = req.params
 
-    const validJobs = ['orderTimeout', 'waitlistProcessing', 'invoiceProcessing']
+    const validJobs = ['orderTimeout', 'waitlistProcessing', 'emailRetry', 'invoiceProcessing']
     if (!validJobs.includes(jobName)) {
       return res.status(400).json({
         success: false,
@@ -160,7 +161,7 @@ router.post('/:jobName/stop', authenticate, requireRole('SUPER_ADMIN'), async (r
   try {
     const { jobName } = req.params
 
-    const validJobs = ['orderTimeout', 'waitlistProcessing', 'invoiceProcessing']
+    const validJobs = ['orderTimeout', 'waitlistProcessing', 'emailRetry', 'invoiceProcessing']
     if (!validJobs.includes(jobName)) {
       return res.status(400).json({
         success: false,
@@ -189,6 +190,44 @@ router.post('/:jobName/stop', authenticate, requireRole('SUPER_ADMIN'), async (r
     res.status(500).json({
       success: false,
       message: 'Error deteniendo job',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    })
+  }
+})
+
+/**
+ * @route POST /api/admin/jobs/email-retry/run
+ * @desc Ejecutar manualmente el job de reintento de emails
+ * @access SUPER_ADMIN
+ */
+router.post('/email-retry/run', authenticate, requireRole('SUPER_ADMIN'), async (req, res) => {
+  try {
+    logger.logBusiness('admin.jobs.emailRetry.runManual', {
+      adminId: req.user.id
+    })
+
+    // Ejecutar job manual
+    const result = await EmailRetryJob.run()
+
+    logger.logBusiness('admin.jobs.emailRetry.runManual.completed', {
+      adminId: req.user.id,
+      result
+    })
+
+    res.status(200).json({
+      success: true,
+      message: 'Job de reintento de emails ejecutado exitosamente',
+      data: result
+    })
+  } catch (error) {
+    logger.logError(error, {
+      operation: 'admin.jobs.emailRetry.runManual',
+      adminId: req.user?.id
+    })
+
+    res.status(500).json({
+      success: false,
+      message: 'Error ejecutando job de reintento de emails',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     })
   }
