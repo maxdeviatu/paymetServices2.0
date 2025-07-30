@@ -611,8 +611,20 @@ class TransactionHandler {
 
         if (licenseResult?.license) {
           // Licencia asignada exitosamente, enviar email ANTES de completar orden
+          logger.info('TransactionHandler: About to send license email (optimized)', {
+            orderId: order.id,
+            transactionId: transaction.id,
+            licenseId: licenseResult.license.id
+          })
+          
           try {
-            await this.sendLicenseEmail(order, transaction)
+            const emailResult = await this.sendLicenseEmail(order, transaction)
+            
+            logger.info('TransactionHandler: sendLicenseEmail completed (optimized)', {
+              orderId: order.id,
+              transactionId: transaction.id,
+              emailResult: emailResult
+            })
             
             // Solo completar la orden si el email se envió exitosamente
             await order.update({
@@ -846,11 +858,22 @@ class TransactionHandler {
    * @param {Transaction} transaction - Transacción
    */
   async sendLicenseEmail (order, transaction) {
+    logger.info('TransactionHandler: sendLicenseEmail method called', {
+      orderId: order.id,
+      transactionId: transaction.id
+    })
+    
     const emailService = require('../../email')
     const { License } = require('../../../models')
 
     const license = await License.findOne({
       where: { orderId: order.id }
+    })
+
+    logger.info('TransactionHandler: License found for email', {
+      orderId: order.id,
+      licenseId: license?.id,
+      licenseKey: license?.licenseKey
     })
 
     if (license) {

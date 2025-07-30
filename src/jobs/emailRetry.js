@@ -31,13 +31,6 @@ class EmailRetryJob {
         },
         include: [
           {
-            association: 'licenses',
-            where: {
-              status: 'SOLD'
-            },
-            required: true
-          },
-          {
             association: 'customer',
             required: true
           },
@@ -48,7 +41,22 @@ class EmailRetryJob {
         ]
       })
 
-      if (ordersWithoutEmail.length === 0) {
+      // Filter orders that have sold licenses
+      const ordersWithLicenses = []
+      for (const order of ordersWithoutEmail) {
+        const license = await License.findOne({
+          where: {
+            orderId: order.id,
+            status: 'SOLD'
+          }
+        })
+        if (license) {
+          order.licenses = [license]
+          ordersWithLicenses.push(order)
+        }
+      }
+
+      if (ordersWithLicenses.length === 0) {
         logger.logBusiness('job:emailRetry.noOrders', {
           checkedAt: new Date()
         })
@@ -60,7 +68,7 @@ class EmailRetryJob {
       const errors = []
 
       // Process each order without email
-      for (const order of ordersWithoutEmail) {
+      for (const order of ordersWithLicenses) {
         try {
           const result = await this.retryEmailForOrder(order)
           processedCount++
@@ -80,7 +88,7 @@ class EmailRetryJob {
       }
 
       logger.logBusiness('job:emailRetry.completed', {
-        totalOrders: ordersWithoutEmail.length,
+        totalOrders: ordersWithLicenses.length,
         processed: processedCount,
         success: successCount,
         errors: errors.length
@@ -89,7 +97,7 @@ class EmailRetryJob {
       return {
         processed: processedCount,
         success: successCount,
-        total: ordersWithoutEmail.length,
+        total: ordersWithLicenses.length,
         errors
       }
     } catch (error) {

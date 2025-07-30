@@ -74,6 +74,10 @@ License.belongsTo(Order, {
   as: 'order',
   allowNull: true
 })
+Order.hasMany(License, {
+  foreignKey: 'orderId',
+  as: 'licenses'
+})
 
 // WaitlistEntry associations
 WaitlistEntry.belongsTo(Order, {
