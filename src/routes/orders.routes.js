@@ -86,4 +86,12 @@ router.post('/:orderId/cancel',
   ordersController.cancelOrder
 )
 
+// Admin: Revive canceled order (EDITOR+ role required)
+router.post('/:orderId/revive',
+  requireRole('EDITOR'),
+  validateOrderLookup,
+  handleValidationErrors,
+  ordersController.reviveOrder
+)
+
 module.exports = router

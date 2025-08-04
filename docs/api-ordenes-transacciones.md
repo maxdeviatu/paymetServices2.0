@@ -480,6 +480,53 @@ Rol Requerido: EDITOR o superior
 }
 ```
 
+#### Revivir Orden Cancelada (Admin)
+```http
+POST {{api_url}}/orders/{orderId}/revive
+Authorization: Bearer {{auth_token}}
+Content-Type: application/json
+Rol Requerido: EDITOR o superior
+
+{
+  "reason": "CUSTOMER_REQUEST"
+}
+```
+
+**Descripción:** Revive una orden cancelada asignando una licencia disponible, enviando el email correspondiente y marcando la orden como completada.
+
+**Flujo del proceso:**
+1. Valida que la orden esté en estado `CANCELED`
+2. Verifica que tenga transacciones asignadas
+3. Busca una licencia disponible para el producto
+4. Asigna la licencia a la orden
+5. Envía email con la licencia
+6. Cambia el estado de la orden a `COMPLETED`
+7. Actualiza la transacción a `PAID`
+
+**Respuesta exitosa:**
+```json
+{
+  "success": true,
+  "data": {
+    "orderId": 123,
+    "transactionId": 456,
+    "status": "COMPLETED",
+    "licenseAssigned": true,
+    "emailSent": true,
+    "revivedAt": "2025-07-30T04:45:00.000Z",
+    "reason": "CUSTOMER_REQUEST",
+    "adminId": 1
+  },
+  "message": "Order revived successfully"
+}
+```
+
+**Posibles errores:**
+- `404`: Orden no encontrada
+- `409`: Orden no está cancelada / No hay licencias disponibles
+- `400`: No hay transacciones válidas
+- `500`: Error interno del servidor
+
 ### 2. Gestión de Transacciones
 
 #### Obtener Estado de Transacción

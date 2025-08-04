@@ -523,3 +523,57 @@ exports.updateOrderStatus = async (req, res) => {
     })
   }
 }
+
+/**
+ * Revive a canceled order (Admin only)
+ */
+exports.reviveOrder = async (req, res) => {
+  try {
+    const { orderId } = req.params
+    const { reason = 'MANUAL' } = req.body
+    const adminId = req.user?.id
+
+    if (!adminId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Admin authentication required'
+      })
+    }
+
+    const result = await orderService.reviveOrder(orderId, reason, adminId)
+
+    res.status(200).json({
+      success: true,
+      data: {
+        orderId: result.orderId,
+        transactionId: result.transactionId,
+        status: result.status,
+        licenseAssigned: result.licenseAssigned,
+        emailSent: result.emailSent,
+        revivedAt: result.revivedAt,
+        reason: result.reason,
+        adminId: result.adminId
+      },
+      message: 'Order revived successfully'
+    })
+  } catch (error) {
+    logger.logError(error, {
+      operation: 'reviveOrder',
+      orderId: req.params.orderId,
+      body: req.body,
+      adminId: req.user?.id
+    })
+
+    const statusCode = error.message === 'Order not found'
+      ? 404
+      : error.message.includes('Cannot revive') ? 409 
+      : error.message.includes('No valid transaction') ? 400
+      : error.message.includes('No available licenses') ? 409
+      : 500
+
+    res.status(statusCode).json({
+      success: false,
+      message: error.message
+    })
+  }
+}
