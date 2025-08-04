@@ -669,8 +669,28 @@ class TransactionHandler {
         // Solo ejecutar la actualización de estado
         await Promise.all(updates)
 
-        // Programar envío de email de confirmación
-        // No enviar email de confirmación por ahora
+        // Para productos sin licencias, completar la orden inmediatamente
+        await order.update({
+          status: 'COMPLETED'
+        }, {
+          transaction: dbTransaction,
+          fields: ['status', 'updated_at']
+        })
+
+        // Programar envío de email de confirmación de forma asíncrona
+        setImmediate(() => {
+          this.sendOrderConfirmation(order, transaction).catch(error => {
+            logger.error('TransactionHandler: Error sending order confirmation', {
+              error: error.message,
+              orderId: order.id
+            })
+          })
+        })
+
+        logger.info('TransactionHandler: Order completed for non-license product', {
+          orderId: order.id,
+          transactionId: transaction.id
+        })
       }
 
       logger.info('TransactionHandler: Payment success handled (optimized)', {

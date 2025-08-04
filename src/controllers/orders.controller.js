@@ -550,6 +550,8 @@ exports.reviveOrder = async (req, res) => {
         status: result.status,
         licenseAssigned: result.licenseAssigned,
         emailSent: result.emailSent,
+        emailMessageId: result.emailMessageId,
+        emailRecipient: result.emailRecipient,
         revivedAt: result.revivedAt,
         reason: result.reason,
         adminId: result.adminId

@@ -539,10 +539,11 @@ async function reviveOrder (orderId, reason = 'MANUAL', adminId = null) {
 
     // 6. Enviar correo con la licencia (FUERA de la transacción)
     let emailSent = false
+    let emailResult = null
     if (result.license) {
       try {
         const emailService = require('./email')
-        await emailService.sendLicenseEmail({
+        emailResult = await emailService.sendLicenseEmail({
           customer: result.customer,
           product: result.product,
           license: result.license,
@@ -556,7 +557,8 @@ async function reviveOrder (orderId, reason = 'MANUAL', adminId = null) {
         logger.logBusiness('order:revive.emailSent', {
           orderId: result.orderId,
           customerEmail: result.customer.email,
-          licenseId: result.license.id
+          licenseId: result.license.id,
+          messageId: emailResult?.messageId
         })
       } catch (emailError) {
         logger.logError(emailError, {
@@ -568,8 +570,8 @@ async function reviveOrder (orderId, reason = 'MANUAL', adminId = null) {
       }
     }
 
-    // 7. Actualizar metadata con el detalle de revivida y correo
-    await Order.update({
+    // 7. Actualizar metadata y shippingInfo con el detalle de revivida y correo
+    const orderUpdates = {
       meta: {
         revived: {
           revivedAt: result.revivedAt,
@@ -579,16 +581,54 @@ async function reviveOrder (orderId, reason = 'MANUAL', adminId = null) {
           licenseAssigned: result.licenseAssigned
         }
       }
-    }, {
+    }
+
+    // Actualizar shippingInfo si se envió el email
+    if (emailSent && emailResult) {
+      orderUpdates.shippingInfo = {
+        email: {
+          sent: true,
+          sentAt: new Date().toISOString(),
+          messageId: emailResult.messageId,
+          recipient: result.customer.email,
+          type: 'license_delivery',
+          revived: true,
+          revivedAt: result.revivedAt,
+          reason: result.reason,
+          adminId: result.adminId
+        }
+      }
+    } else if (!emailSent && result.license) {
+      // Si no se pudo enviar el email pero hay licencia, registrar el intento
+      orderUpdates.shippingInfo = {
+        email: {
+          sent: false,
+          attemptedAt: new Date().toISOString(),
+          recipient: result.customer.email,
+          type: 'license_delivery',
+          revived: true,
+          revivedAt: result.revivedAt,
+          reason: result.reason,
+          adminId: result.adminId,
+          error: 'Email sending failed during order revival'
+        }
+      }
+    }
+
+    await Order.update(orderUpdates, {
       where: { id: result.orderId }
     })
 
     result.emailSent = emailSent
+    result.emailMessageId = emailResult?.messageId
+    result.emailRecipient = result.customer?.email
 
     logger.logBusiness('order:revive.success', {
       orderId: result.orderId,
       emailSent: emailSent,
-      licenseAssigned: result.licenseAssigned
+      licenseAssigned: result.licenseAssigned,
+      messageId: emailResult?.messageId,
+      recipient: result.customer?.email
     })
 
     return result

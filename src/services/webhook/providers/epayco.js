@@ -1,4 +1,5 @@
 const logger = require('../../../config/logger')
+const crypto = require('crypto')
 
 /**
  * Adaptador de webhook para ePayco
@@ -7,6 +8,9 @@ const logger = require('../../../config/logger')
 class EPaycoAdapter {
   constructor () {
     this.name = 'epayco'
+    // Configuración de ePayco para verificación de firma
+    this.pCustIdCliente = process.env.EPAYCO_P_CUST_ID_CLIENTE
+    this.pKey = process.env.EPAYCO_P_KEY
   }
 
   /**
@@ -115,18 +119,43 @@ class EPaycoAdapter {
       const body = req.body
       
       // Verificar que tenga los campos requeridos
-      if (!body.x_id_factura || !body.x_transaction_id || !body.x_amount) {
+      if (!body.x_id_factura || !body.x_transaction_id || !body.x_amount || !body.x_signature) {
         logger.warn('EPaycoAdapter: Missing required fields', {
           hasInvoice: !!body.x_id_factura,
           hasTransactionId: !!body.x_transaction_id,
-          hasAmount: !!body.x_amount
+          hasAmount: !!body.x_amount,
+          hasSignature: !!body.x_signature
         })
         return false
       }
 
-      // Para ePayco, la verificación de firma se hace en el proveedor de pago
-      // Aquí solo validamos que tenga los campos mínimos
-      return true
+      // Verificar firma SHA256 de ePayco
+      const stringToSign = [
+        this.pCustIdCliente,
+        this.pKey,
+        body.x_ref_payco,
+        body.x_transaction_id,
+        body.x_amount,
+        body.x_currency_code
+      ].join('^')
+
+      const computed = crypto.createHash('sha256').update(stringToSign).digest('hex')
+      const isValid = computed === body.x_signature
+
+      logger.debug('EPaycoAdapter: Signature verification', {
+        computed: computed.substring(0, 10) + '...',
+        received: body.x_signature?.substring(0, 10) + '...',
+        isValid
+      })
+
+      if (!isValid) {
+        logger.error('EPaycoAdapter: Invalid signature', {
+          computed: computed.substring(0, 10) + '...',
+          received: body.x_signature?.substring(0, 10) + '...'
+        })
+      }
+
+      return isValid
     } catch (error) {
       logger.error('EPaycoAdapter: Error verifying signature', {
         error: error.message

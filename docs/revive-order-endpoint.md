@@ -77,6 +77,8 @@ Content-Type: application/json
     "status": "COMPLETED",
     "licenseAssigned": true,
     "emailSent": true,
+    "emailMessageId": "<202508041610.90032426932@smtp-relay.mailin.fr>",
+    "emailRecipient": "customer@example.com",
     "revivedAt": "2025-07-30T04:45:00.000Z",
     "reason": "CUSTOMER_REQUEST",
     "adminId": 1
@@ -187,6 +189,19 @@ El endpoint registra todos los eventos importantes:
       "adminId": 1,
       "emailSent": true,
       "licenseAssigned": true
+    }
+  },
+  "shippingInfo": {
+    "email": {
+      "sent": true,
+      "sentAt": "2025-07-30T04:45:00.000Z",
+      "messageId": "<202508041610.90032426932@smtp-relay.mailin.fr>",
+      "recipient": "customer@example.com",
+      "type": "license_delivery",
+      "revived": true,
+      "revivedAt": "2025-07-30T04:45:00.000Z",
+      "reason": "CUSTOMER_REQUEST",
+      "adminId": 1
     }
   }
 }
