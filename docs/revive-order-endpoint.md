@@ -2,7 +2,7 @@
 
 ## Descripción
 
-El endpoint `POST /orders/{orderId}/revive` permite revivir una orden que ha sido cancelada, asignando una licencia disponible, enviando el email correspondiente y marcando la orden como completada.
+El endpoint `POST /orders/{orderId}/revive` permite revivir una orden que ha sido cancelada o está pendiente, asignando una licencia disponible, enviando el email correspondiente y marcando la orden como completada.
 
 ## URL
 
@@ -43,7 +43,7 @@ Content-Type: application/json
 
 1. **Validación de la orden**
    - Verifica que la orden existe
-   - Valida que esté en estado `CANCELED`
+   - Valida que esté en estado `CANCELED` o `PENDING`
    - Confirma que tenga transacciones asignadas
 
 2. **Validación de transacciones**
@@ -95,11 +95,11 @@ Content-Type: application/json
 }
 ```
 
-### 409 - Orden no está cancelada
+### 409 - Orden no está cancelada o pendiente
 ```json
 {
   "success": false,
-  "message": "Cannot revive order with status COMPLETED. Order must be CANCELED"
+  "message": "Cannot revive order with status COMPLETED. Order must be CANCELED or PENDING"
 }
 ```
 
@@ -218,6 +218,8 @@ El endpoint registra todos los eventos importantes:
 2. **Error en el sistema**: Una orden se canceló incorrectamente por un error
 3. **Pago manual**: El cliente realizó el pago por otro medio
 4. **Corrección administrativa**: Necesidad de corregir un estado incorrecto
+5. **Órdenes pendientes**: Órdenes que se quedaron en estado PENDING por problemas técnicos
+6. **Timeout manual**: Órdenes que necesitan ser completadas manualmente después de un timeout
 
 ## Dependencias
 

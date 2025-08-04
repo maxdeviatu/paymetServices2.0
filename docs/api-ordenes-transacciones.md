@@ -492,10 +492,10 @@ Rol Requerido: EDITOR o superior
 }
 ```
 
-**Descripción:** Revive una orden cancelada asignando una licencia disponible, enviando el email correspondiente y marcando la orden como completada.
+**Descripción:** Revive una orden cancelada o pendiente asignando una licencia disponible, enviando el email correspondiente y marcando la orden como completada.
 
 **Flujo del proceso:**
-1. Valida que la orden esté en estado `CANCELED`
+1. Valida que la orden esté en estado `CANCELED` o `PENDING`
 2. Verifica que tenga transacciones asignadas
 3. Busca una licencia disponible para el producto
 4. Asigna la licencia a la orden
@@ -523,7 +523,7 @@ Rol Requerido: EDITOR o superior
 
 **Posibles errores:**
 - `404`: Orden no encontrada
-- `409`: Orden no está cancelada / No hay licencias disponibles
+- `409`: Orden no está cancelada o pendiente / No hay licencias disponibles
 - `400`: No hay transacciones válidas
 - `500`: Error interno del servidor
 

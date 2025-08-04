@@ -439,9 +439,9 @@ async function reviveOrder (orderId, reason = 'MANUAL', adminId = null) {
       throw new Error('Order not found')
     }
 
-    // Validar que la orden esté cancelada
-    if (order.status !== 'CANCELED') {
-      throw new Error(`Cannot revive order with status ${order.status}. Order must be CANCELED`)
+    // Validar que la orden esté cancelada o pendiente
+    if (!['CANCELED', 'PENDING'].includes(order.status)) {
+      throw new Error(`Cannot revive order with status ${order.status}. Order must be CANCELED or PENDING`)
     }
 
     // 2. Validar que la orden tenga una transacción asignada
