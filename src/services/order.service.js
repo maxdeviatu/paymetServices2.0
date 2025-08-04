@@ -546,7 +546,10 @@ async function reviveOrder (orderId, reason = 'MANUAL', adminId = null) {
           customer: result.customer,
           product: result.product,
           license: result.license,
-          order: { id: result.orderId }
+          order: { 
+            id: result.orderId,
+            createdAt: new Date() // Usar fecha actual para ordenes revividas
+          }
         })
         emailSent = true
 
