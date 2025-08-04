@@ -426,75 +426,74 @@ async function reviveOrder (orderId, reason = 'MANUAL', adminId = null) {
   try {
     logger.logBusiness('order:revive', { orderId, reason, adminId })
 
-    const result = await TransactionManager.executePaymentTransaction(async (t) => {
-      // 1. Encontrar la orden
-      const order = await Order.findByPk(orderId, {
-        include: [
-          { association: 'product' },
-          { association: 'customer' },
-          { association: 'transactions' }
-        ],
-        lock: t.LOCK.UPDATE,
-        transaction: t
+    // 1. Encontrar la orden (sin transacción primero)
+    const order = await Order.findByPk(orderId, {
+      include: [
+        { association: 'product' },
+        { association: 'customer' },
+        { association: 'transactions' }
+      ]
+    })
+
+    if (!order) {
+      throw new Error('Order not found')
+    }
+
+    // Validar que la orden esté cancelada
+    if (order.status !== 'CANCELED') {
+      throw new Error(`Cannot revive order with status ${order.status}. Order must be CANCELED`)
+    }
+
+    // 2. Validar que la orden tenga una transacción asignada
+    if (!order.transactions || order.transactions.length === 0) {
+      throw new Error('Order has no transactions assigned')
+    }
+
+    // 3. Comprobar la transacción (buscar una transacción válida)
+    const validTransaction = order.transactions.find(tx => 
+      ['CREATED', 'PENDING', 'PAID', 'FAILED'].includes(tx.status)
+    )
+
+    if (!validTransaction) {
+      throw new Error('No valid transaction found for this order')
+    }
+
+    // 4. Identificar que licencia busca el usuario y asignar una disponible
+    let licenseResult = null
+    if (order.product && order.product.license_type) {
+      // Buscar licencia disponible
+      const availableLicense = await License.findOne({
+        where: {
+          productRef: order.productRef,
+          status: 'AVAILABLE'
+        }
       })
 
-      if (!order) {
-        throw new Error('Order not found')
+      if (!availableLicense) {
+        throw new Error(`No available licenses for product ${order.productRef}`)
       }
 
-      // Validar que la orden esté cancelada
-      if (order.status !== 'CANCELED') {
-        throw new Error(`Cannot revive order with status ${order.status}. Order must be CANCELED`)
-      }
+      licenseResult = availableLicense
+    }
 
-      // 2. Validar que la orden tenga una transacción asignada
-      if (!order.transactions || order.transactions.length === 0) {
-        throw new Error('Order has no transactions assigned')
-      }
-
-      // 3. Comprobar la transacción (buscar una transacción válida)
-      const validTransaction = order.transactions.find(tx => 
-        ['CREATED', 'PENDING', 'PAID', 'FAILED'].includes(tx.status)
-      )
-
-      if (!validTransaction) {
-        throw new Error('No valid transaction found for this order')
-      }
-
-      // 4. Identificar que licencia busca el usuario y asignar una disponible
-      let licenseResult = null
-      if (order.product && order.product.license_type) {
-        // Buscar licencia disponible
-        const availableLicense = await License.findOne({
-          where: {
-            productRef: order.productRef,
-            status: 'AVAILABLE'
-          },
-          lock: t.LOCK.UPDATE,
-          transaction: t
-        })
-
-        if (!availableLicense) {
-          throw new Error(`No available licenses for product ${order.productRef}`)
-        }
-
-        // Asignar licencia
-        await availableLicense.update({
+    // 5. Ejecutar transacción para actualizar todo
+    const result = await TransactionManager.executeWebhookTransaction(async (t) => {
+      // Asignar licencia si existe
+      if (licenseResult) {
+        await licenseResult.update({
           status: 'SOLD',
           orderId: order.id,
           soldAt: new Date()
         }, { transaction: t })
 
-        licenseResult = availableLicense
-
         logger.logBusiness('order:revive.licenseAssigned', {
           orderId: order.id,
-          licenseId: availableLicense.id,
+          licenseId: licenseResult.id,
           productRef: order.productRef
         })
       }
 
-      // 6. Pasar tanto orden como transacción a completada
+      // Actualizar orden
       await order.update({
         status: 'COMPLETED',
         meta: {
@@ -503,13 +502,13 @@ async function reviveOrder (orderId, reason = 'MANUAL', adminId = null) {
             revivedAt: new Date().toISOString(),
             reason: reason,
             adminId: adminId,
-            emailSent: false, // Se actualizará después del email
+            emailSent: false,
             licenseAssigned: !!licenseResult
           }
         }
       }, { transaction: t })
 
-      // Actualizar transacción a PAID
+      // Actualizar transacción
       await validTransaction.update({
         status: 'PAID',
         meta: {
@@ -522,14 +521,6 @@ async function reviveOrder (orderId, reason = 'MANUAL', adminId = null) {
         }
       }, { transaction: t })
 
-      logger.logBusiness('order:revive.dbSuccess', {
-        orderId: order.id,
-        transactionId: validTransaction.id,
-        licenseAssigned: !!licenseResult,
-        reason: reason,
-        adminId: adminId
-      })
-
       return {
         success: true,
         orderId: order.id,
@@ -540,14 +531,13 @@ async function reviveOrder (orderId, reason = 'MANUAL', adminId = null) {
         revivedAt: new Date().toISOString(),
         reason: reason,
         adminId: adminId,
-        // Datos para el email
         customer: order.customer,
         product: order.product,
         license: licenseResult
       }
     })
 
-    // 5. Enviar correo con la licencia (FUERA de la transacción)
+    // 6. Enviar correo con la licencia (FUERA de la transacción)
     let emailSent = false
     if (result.license) {
       try {
