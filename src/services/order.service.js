@@ -1,4 +1,4 @@
-const { Order, Transaction, Product, User, sequelize } = require('../models')
+const { Order, Transaction, Product, User, License, sequelize } = require('../models')
 const { Op } = require('sequelize')
 const logger = require('../config/logger')
 const userService = require('./user.service')
@@ -426,7 +426,7 @@ async function reviveOrder (orderId, reason = 'MANUAL', adminId = null) {
   try {
     logger.logBusiness('order:revive', { orderId, reason, adminId })
 
-    return await TransactionManager.executePaymentTransaction(async (t) => {
+    const result = await TransactionManager.executePaymentTransaction(async (t) => {
       // 1. Encontrar la orden
       const order = await Order.findByPk(orderId, {
         include: [
@@ -442,70 +442,59 @@ async function reviveOrder (orderId, reason = 'MANUAL', adminId = null) {
         throw new Error('Order not found')
       }
 
-      // 2. Validar que la orden esté cancelada
+      // Validar que la orden esté cancelada
       if (order.status !== 'CANCELED') {
         throw new Error(`Cannot revive order with status ${order.status}. Order must be CANCELED`)
       }
 
-      // 3. Validar que la orden tenga una transacción asignada
+      // 2. Validar que la orden tenga una transacción asignada
       if (!order.transactions || order.transactions.length === 0) {
         throw new Error('Order has no transactions assigned')
       }
 
-      // 4. Comprobar la transacción (buscar una transacción válida)
-      const validTransaction = order.transactions.find(t => 
-        ['CREATED', 'PENDING', 'PAID'].includes(t.status)
+      // 3. Comprobar la transacción (buscar una transacción válida)
+      const validTransaction = order.transactions.find(tx => 
+        ['CREATED', 'PENDING', 'PAID', 'FAILED'].includes(tx.status)
       )
 
       if (!validTransaction) {
         throw new Error('No valid transaction found for this order')
       }
 
-      // 5. Identificar que licencia busca el usuario y asignar una disponible
+      // 4. Identificar que licencia busca el usuario y asignar una disponible
       let licenseResult = null
       if (order.product && order.product.license_type) {
-        try {
-          const { License } = require('../models')
-          
-          // Buscar licencia disponible
-          const availableLicense = await License.findOne({
-            where: {
-              productRef: order.productRef,
-              status: 'AVAILABLE'
-            },
-            lock: t.LOCK.UPDATE,
-            transaction: t
-          })
+        // Buscar licencia disponible
+        const availableLicense = await License.findOne({
+          where: {
+            productRef: order.productRef,
+            status: 'AVAILABLE'
+          },
+          lock: t.LOCK.UPDATE,
+          transaction: t
+        })
 
-          if (!availableLicense) {
-            throw new Error(`No available licenses for product ${order.productRef}`)
-          }
-
-          // Asignar licencia
-          await availableLicense.update({
-            status: 'SOLD',
-            orderId: order.id,
-            soldAt: new Date()
-          }, { transaction: t })
-
-          licenseResult = availableLicense
-
-          logger.logBusiness('order:revive.licenseAssigned', {
-            orderId: order.id,
-            licenseId: availableLicense.id,
-            productRef: order.productRef
-          })
-        } catch (licenseError) {
-          logger.logError(licenseError, {
-            operation: 'reviveOrder.licenseAssignment',
-            orderId: order.id,
-            productRef: order.productRef
-          })
-          throw licenseError
+        if (!availableLicense) {
+          throw new Error(`No available licenses for product ${order.productRef}`)
         }
+
+        // Asignar licencia
+        await availableLicense.update({
+          status: 'SOLD',
+          orderId: order.id,
+          soldAt: new Date()
+        }, { transaction: t })
+
+        licenseResult = availableLicense
+
+        logger.logBusiness('order:revive.licenseAssigned', {
+          orderId: order.id,
+          licenseId: availableLicense.id,
+          productRef: order.productRef
+        })
       }
 
-      // 7. Pasar tanto orden como transacción a completada
+      // 6. Pasar tanto orden como transacción a completada
       await order.update({
         status: 'COMPLETED',
         meta: {
@@ -520,22 +509,20 @@ async function reviveOrder (orderId, reason = 'MANUAL', adminId = null) {
         }
       }, { transaction: t })
 
-      // Actualizar transacción a PAID si no lo está
-      if (validTransaction.status !== 'PAID') {
-        await validTransaction.update({
-          status: 'PAID',
-          meta: {
-            ...validTransaction.meta,
-            revived: {
-              revivedAt: new Date().toISOString(),
-              reason: reason,
-              adminId: adminId
-            }
+      // Actualizar transacción a PAID
+      await validTransaction.update({
+        status: 'PAID',
+        meta: {
+          ...validTransaction.meta,
+          revived: {
+            revivedAt: new Date().toISOString(),
+            reason: reason,
+            adminId: adminId
           }
-        }, { transaction: t })
-      }
+        }
+      }, { transaction: t })
 
-      logger.logBusiness('order:revive.success', {
+      logger.logBusiness('order:revive.dbSuccess', {
         orderId: order.id,
         transactionId: validTransaction.id,
         licenseAssigned: !!licenseResult,
@@ -543,14 +530,13 @@ async function reviveOrder (orderId, reason = 'MANUAL', adminId = null) {
         adminId: adminId
       })
 
-      // Retornar resultado para procesamiento posterior
       return {
         success: true,
         orderId: order.id,
         transactionId: validTransaction.id,
         status: 'COMPLETED',
         licenseAssigned: !!licenseResult,
-        emailSent: false, // Se actualizará después
+        emailSent: false,
         revivedAt: new Date().toISOString(),
         reason: reason,
         adminId: adminId,
@@ -561,7 +547,7 @@ async function reviveOrder (orderId, reason = 'MANUAL', adminId = null) {
       }
     })
 
-    // 6. Enviar correo con la licencia (FUERA de la transacción)
+    // 5. Enviar correo con la licencia (FUERA de la transacción)
     let emailSent = false
     if (result.license) {
       try {
@@ -579,50 +565,38 @@ async function reviveOrder (orderId, reason = 'MANUAL', adminId = null) {
           customerEmail: result.customer.email,
           licenseId: result.license.id
         })
-
-        // Actualizar metadata con el estado del email
-        await Order.update({
-          meta: {
-            revived: {
-              revivedAt: result.revivedAt,
-              reason: result.reason,
-              adminId: result.adminId,
-              emailSent: true,
-              licenseAssigned: true
-            }
-          }
-        }, {
-          where: { id: result.orderId }
-        })
-
       } catch (emailError) {
         logger.logError(emailError, {
           operation: 'reviveOrder.sendEmail',
           orderId: result.orderId,
-          customerEmail: result.customer.email
+          customerEmail: result.customer?.email
         })
-        // No fallar si el email no se puede enviar, pero registrar el error
-        
-        // Actualizar metadata indicando que el email falló
-        await Order.update({
-          meta: {
-            revived: {
-              revivedAt: result.revivedAt,
-              reason: result.reason,
-              adminId: result.adminId,
-              emailSent: false,
-              emailError: emailError.message,
-              licenseAssigned: true
-            }
-          }
-        }, {
-          where: { id: result.orderId }
-        })
+        // No fallar si el email no se puede enviar
       }
     }
 
-    // Actualizar resultado final
+    // 7. Actualizar metadata con el detalle de revivida y correo
+    await Order.update({
+      meta: {
+        revived: {
+          revivedAt: result.revivedAt,
+          reason: result.reason,
+          adminId: result.adminId,
+          emailSent: emailSent,
+          licenseAssigned: result.licenseAssigned
+        }
+      }
+    }, {
+      where: { id: result.orderId }
+    })
+
     result.emailSent = emailSent
+
+    logger.logBusiness('order:revive.success', {
+      orderId: result.orderId,
+      emailSent: emailSent,
+      licenseAssigned: result.licenseAssigned
+    })
 
     return result
   } catch (error) {
