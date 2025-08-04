@@ -505,34 +505,6 @@ async function reviveOrder (orderId, reason = 'MANUAL', adminId = null) {
         }
       }
 
-      // 6. Enviar correo con la licencia
-      let emailSent = false
-      if (licenseResult) {
-        try {
-          const emailService = require('./email')
-          await emailService.sendLicenseEmail({
-            customer: order.customer,
-            product: order.product,
-            license: licenseResult,
-            order
-          })
-          emailSent = true
-
-          logger.logBusiness('order:revive.emailSent', {
-            orderId: order.id,
-            customerEmail: order.customer.email,
-            licenseId: licenseResult.id
-          })
-        } catch (emailError) {
-          logger.logError(emailError, {
-            operation: 'reviveOrder.sendEmail',
-            orderId: order.id,
-            customerEmail: order.customer.email
-          })
-          // No fallar si el email no se puede enviar, pero registrar el error
-        }
-      }
-
       // 7. Pasar tanto orden como transacción a completada
       await order.update({
         status: 'COMPLETED',
@@ -542,7 +514,7 @@ async function reviveOrder (orderId, reason = 'MANUAL', adminId = null) {
             revivedAt: new Date().toISOString(),
             reason: reason,
             adminId: adminId,
-            emailSent: emailSent,
+            emailSent: false, // Se actualizará después del email
             licenseAssigned: !!licenseResult
           }
         }
@@ -567,23 +539,92 @@ async function reviveOrder (orderId, reason = 'MANUAL', adminId = null) {
         orderId: order.id,
         transactionId: validTransaction.id,
         licenseAssigned: !!licenseResult,
-        emailSent: emailSent,
         reason: reason,
         adminId: adminId
       })
 
+      // Retornar resultado para procesamiento posterior
       return {
         success: true,
         orderId: order.id,
         transactionId: validTransaction.id,
         status: 'COMPLETED',
         licenseAssigned: !!licenseResult,
-        emailSent: emailSent,
+        emailSent: false, // Se actualizará después
         revivedAt: new Date().toISOString(),
         reason: reason,
-        adminId: adminId
+        adminId: adminId,
+        // Datos para el email
+        customer: order.customer,
+        product: order.product,
+        license: licenseResult
       }
     })
+
+    // 6. Enviar correo con la licencia (FUERA de la transacción)
+    let emailSent = false
+    if (result.license) {
+      try {
+        const emailService = require('./email')
+        await emailService.sendLicenseEmail({
+          customer: result.customer,
+          product: result.product,
+          license: result.license,
+          order: { id: result.orderId }
+        })
+        emailSent = true
+
+        logger.logBusiness('order:revive.emailSent', {
+          orderId: result.orderId,
+          customerEmail: result.customer.email,
+          licenseId: result.license.id
+        })
+
+        // Actualizar metadata con el estado del email
+        await Order.update({
+          meta: {
+            revived: {
+              revivedAt: result.revivedAt,
+              reason: result.reason,
+              adminId: result.adminId,
+              emailSent: true,
+              licenseAssigned: true
+            }
+          }
+        }, {
+          where: { id: result.orderId }
+        })
+
+      } catch (emailError) {
+        logger.logError(emailError, {
+          operation: 'reviveOrder.sendEmail',
+          orderId: result.orderId,
+          customerEmail: result.customer.email
+        })
+        // No fallar si el email no se puede enviar, pero registrar el error
+        
+        // Actualizar metadata indicando que el email falló
+        await Order.update({
+          meta: {
+            revived: {
+              revivedAt: result.revivedAt,
+              reason: result.reason,
+              adminId: result.adminId,
+              emailSent: false,
+              emailError: emailError.message,
+              licenseAssigned: true
+            }
+          }
+        }, {
+          where: { id: result.orderId }
+        })
+      }
+    }
+
+    // Actualizar resultado final
+    result.emailSent = emailSent
+
+    return result
   } catch (error) {
     logger.logError(error, {
       operation: 'reviveOrder',
