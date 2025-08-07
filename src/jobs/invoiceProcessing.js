@@ -11,7 +11,19 @@ class InvoiceProcessingJob {
     this.invoiceService = new InvoiceService()
     this.isRunning = false
     this.lastRun = null
+    this.isEnabled = process.env.ENABLE_INVOICE_PROCESSING === 'true'
     this.schedule = process.env.INVOICE_JOB_SCHEDULE || '0 2 * * *' // 2 AM todos los días por defecto
+  }
+
+  /**
+   * Verifica si el job debe ejecutarse
+   */
+  shouldRun() {
+    if (!this.isEnabled) {
+      logger.info('Job de facturación deshabilitado por configuración')
+      return false
+    }
+    return true
   }
 
   /**
@@ -35,32 +47,111 @@ class InvoiceProcessingJob {
       // Obtener configuración del job
       const config = {
         providerName: process.env.INVOICE_DEFAULT_PROVIDER || 'siigo',
-        delayBetweenInvoices: parseInt(process.env.INVOICE_DELAY_BETWEEN_MS, 10) || 60000, // 1 minuto
-        includeAll: false // Solo procesar desde la última transacción
+        delayBetweenInvoices: parseInt(process.env.INVOICE_DELAY_BETWEEN_MS, 10) || 60000 // 1 minuto
       }
 
       logger.info('📋 Configuración del job:', config)
 
-      // Ejecutar procesamiento
-      const result = await this.invoiceService.processAllPendingTransactions(config)
+      // Buscar transacciones en estado PENDING
+      const pendingTransactions = await Transaction.findAll({
+        where: {
+          invoiceStatus: 'PENDING'
+        },
+        include: [{
+          model: Order,
+          include: ['customer', 'product']
+        }]
+      })
+
+      if (pendingTransactions.length === 0) {
+        logger.info('✅ No hay transacciones pendientes de facturar')
+        return {
+          processed: 0,
+          successful: 0,
+          failed: 0,
+          errors: []
+        }
+      }
+
+      const results = {
+        processed: 0,
+        successful: 0,
+        failed: 0,
+        errors: []
+      }
+
+      // Procesar cada transacción
+      for (const transaction of pendingTransactions) {
+        try {
+          // Marcar como en proceso
+          await transaction.update({ invoiceStatus: 'PROCESSING' })
+
+          // Generar factura
+          const invoiceResult = await this.invoiceService.generateInvoice(transaction, config)
+
+          if (invoiceResult.success) {
+            // Crear registro en tabla de facturas
+            const invoice = await Invoice.create({
+              transactionId: transaction.id,
+              providerInvoiceId: invoiceResult.providerInvoiceId,
+              provider: config.providerName,
+              amount: transaction.amount,
+              currency: transaction.currency,
+              metadata: invoiceResult.metadata
+            })
+
+            // Actualizar transacción como completada
+            await transaction.update({
+              invoiceStatus: 'COMPLETED',
+              invoiceId: invoice.id
+            })
+
+            results.successful++
+          } else {
+            // Marcar como fallida
+            await transaction.update({ invoiceStatus: 'FAILED' })
+            results.failed++
+            results.errors.push({
+              transactionId: transaction.id,
+              error: invoiceResult.error
+            })
+          }
+
+          results.processed++
+
+          // Esperar antes de la siguiente factura
+          if (config.delayBetweenInvoices > 0) {
+            await new Promise(resolve => setTimeout(resolve, config.delayBetweenInvoices))
+          }
+        } catch (error) {
+          // En caso de error, marcar como fallida
+          await transaction.update({ invoiceStatus: 'FAILED' })
+          results.failed++
+          results.errors.push({
+            transactionId: transaction.id,
+            error: error.message
+          })
+          results.processed++
+        }
+      }
 
       const duration = Date.now() - startTime
 
       logger.info('✅ Job de facturación completado:', {
-        ...result,
+        ...results,
         duration: `${duration}ms`,
         durationMinutes: Math.round(duration / 60000 * 100) / 100
       })
 
       // Registrar evento de negocio
       logger.logBusiness('invoiceJob.completed', {
-        ...result,
+        ...results,
         duration,
         config
       })
 
       this.lastRun = new Date()
-      return result
+      return results
     } catch (error) {
       const duration = Date.now() - startTime
 

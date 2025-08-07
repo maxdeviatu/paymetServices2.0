@@ -176,6 +176,19 @@ class EnvironmentValidator {
           type: 'number',
           default: '60000',
           description: 'Delay en milisegundos entre facturas (defecto: 1 minuto)'
+        },
+        ENABLE_INVOICE_PROCESSING: {
+          required: false,
+          type: 'string',
+          enum: ['true', 'false'],
+          default: 'false',
+          description: 'Habilita/deshabilita el job de facturación automática'
+        },
+        INVOICE_JOB_SCHEDULE: {
+          required: false,
+          type: 'string',
+          default: '0 2 * * *',
+          description: 'Cron schedule para el job de facturación (defecto: 2 AM)'
         }
       },
 

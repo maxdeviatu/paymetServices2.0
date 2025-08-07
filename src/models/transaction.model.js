@@ -51,11 +51,14 @@ const Transaction = sequelize.define('Transaction', {
   invoiceStatus: {
     type: DataTypes.ENUM('NOT_REQUIRED', 'PENDING', 'PROCESSING', 'COMPLETED', 'FAILED'),
     defaultValue: 'NOT_REQUIRED',
-    comment: 'Invoice generation status',
+    comment: 'Estado de generación de factura: NOT_REQUIRED (no necesita factura), PENDING (pendiente de facturar), PROCESSING (facturando), COMPLETED (facturada), FAILED (falló facturación)',
     validate: {
       isValidStatus(value) {
         if (this.status === 'PAID' && value === 'NOT_REQUIRED') {
           throw new Error('Las transacciones pagadas deben tener un estado de facturación PENDING')
+        }
+        if (value === 'COMPLETED' && !this.invoiceId) {
+          throw new Error('No se puede marcar como COMPLETED sin un invoiceId')
         }
       }
     }

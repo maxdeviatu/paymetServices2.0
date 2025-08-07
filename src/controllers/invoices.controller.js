@@ -133,50 +133,35 @@ class InvoicesController {
    * @param {Object} req - Request object
    * @param {Object} res - Response object
    */
+  /**
+   * Ejecuta el proceso de facturación manualmente
+   * @route POST /api/invoices/execute
+   * @access EDITOR+
+   */
   async executeInvoicing (req, res) {
     try {
-      const {
-        provider = 'siigo',
-        includeAll = false,
-        delayBetweenInvoices = 60000
-      } = req.body
+      // Forzar la ejecución del job independientemente de la configuración
+      const job = new InvoiceProcessingJob()
+      job.isEnabled = true // Forzar habilitación para ejecución manual
 
-      // Validar proveedor
-      const validProviders = ['siigo', 'mock']
-      if (!validProviders.includes(provider)) {
-        return res.status(400).json({
-          success: false,
-          message: `Proveedor inválido. Debe ser uno de: ${validProviders.join(', ')}`
-        })
-      }
+      const result = await job.run()
 
+      // Registrar evento de negocio
       logger.logBusiness('invoices.executeInvoicing', {
-        provider,
-        includeAll,
-        delayBetweenInvoices,
+        result,
+        manual: true,
         adminId: req.user.id
       })
 
-      // Asegurar que el servicio esté inicializado
-      await this.invoiceService.initialize()
-
-      // Ejecutar procesamiento masivo
-      const result = await this.invoiceService.processAllPendingTransactions({
-        providerName: provider,
-        includeAll: Boolean(includeAll),
-        delayBetweenInvoices: parseInt(delayBetweenInvoices, 10)
-      })
-
-      logger.logBusiness('invoices.executeInvoicing.completed', {
-        ...result,
-        provider,
-        adminId: req.user.id
-      })
-
-      res.status(200).json({
+      res.json({
         success: true,
-        message: 'Proceso de facturación completado',
-        data: result
+        message: 'Proceso de facturación ejecutado exitosamente',
+        data: {
+          processed: result.processed,
+          successful: result.successful,
+          failed: result.failed,
+          errors: result.errors
+        }
       })
     } catch (error) {
       logger.logError(error, {
