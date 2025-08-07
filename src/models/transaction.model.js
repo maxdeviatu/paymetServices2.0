@@ -49,9 +49,16 @@ const Transaction = sequelize.define('Transaction', {
     defaultValue: 'CREATED'
   },
   invoiceStatus: {
-    type: DataTypes.STRING,
+    type: DataTypes.ENUM('NOT_REQUIRED', 'PENDING', 'PROCESSING', 'COMPLETED', 'FAILED'),
     defaultValue: 'NOT_REQUIRED',
-    comment: 'Invoice generation status'
+    comment: 'Invoice generation status',
+    validate: {
+      isValidStatus(value) {
+        if (this.status === 'PAID' && value === 'NOT_REQUIRED') {
+          throw new Error('Las transacciones pagadas deben tener un estado de facturación PENDING')
+        }
+      }
+    }
   },
 
   // ID de la factura generada por el proveedor de facturación

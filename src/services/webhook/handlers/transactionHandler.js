@@ -70,7 +70,23 @@ class TransactionHandler {
 
         // Actualizar la transacción de forma más eficiente
         const oldStatus = transaction.status
-        await this.updateTransactionOptimized(transaction, webhookEvent, t)
+        // Actualizar la transacción y su estado de facturación si es necesario
+        const updateData = {
+          status: webhookEvent.status,
+          paymentMethod: webhookEvent.paymentMethod,
+          meta: {
+            ...transaction.meta,
+            webhook: webhookEvent,
+            lastWebhookAt: new Date().toISOString()
+          }
+        }
+
+        // Si el pago es exitoso, marcar para facturación
+        if (webhookEvent.status === 'PAID') {
+          updateData.invoiceStatus = 'PENDING'
+        }
+
+        await transaction.update(updateData, { transaction: t })
 
         // Procesar lógica específica según el estado (sin bloquear la transacción principal)
         const processingPromises = []
@@ -588,6 +604,16 @@ class TransactionHandler {
 
       // Batch updates para mejor performance
       const updates = []
+
+      // Actualizar estado de facturación a PENDING
+      updates.push(
+        transaction.update({
+          invoiceStatus: 'PENDING'
+        }, {
+          transaction: dbTransaction,
+          fields: ['invoiceStatus', 'updated_at']
+        })
+      )
 
       // Actualizar estado de la orden
       updates.push(
