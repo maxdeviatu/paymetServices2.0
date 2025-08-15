@@ -225,26 +225,47 @@ class WebhookService {
    * @returns {Promise<WebhookEvent|null>} - Evento existente si ya fue procesado
    */
   async checkIdempotency (webhookEvent) {
-    const whereClause = {
-      provider: webhookEvent.provider,
-      externalRef: webhookEvent.externalRef
-    }
-
-    // Si hay eventId, también verificar por ese campo
-    if (webhookEvent.eventId) {
-      whereClause.eventId = webhookEvent.eventId
-    }
-
-    return await WebhookEvent.findOne({
-      where: whereClause,
+    // Buscar SOLO por provider y externalRef (no por eventId)
+    // ePayco puede enviar múltiples webhooks con diferentes eventId para la misma transacción
+    // La idempotencia debe basarse en la referencia externa, no en el ID del evento
+    
+    const existingEvent = await WebhookEvent.findOne({
+      where: {
+        provider: webhookEvent.provider,
+        externalRef: webhookEvent.externalRef
+      },
       order: [['createdAt', 'DESC']]
     })
+
+    if (existingEvent) {
+      logger.info('WebhookService: Idempotency check - Event already exists', {
+        provider: webhookEvent.provider,
+        externalRef: webhookEvent.externalRef,
+        existingEventId: existingEvent.eventId,
+        newEventId: webhookEvent.eventId,
+        existingStatus: existingEvent.status,
+        newStatus: webhookEvent.status,
+        existingCreatedAt: existingEvent.createdAt
+      })
+    } else {
+      logger.debug('WebhookService: Idempotency check - No existing event found', {
+        provider: webhookEvent.provider,
+        externalRef: webhookEvent.externalRef,
+        newEventId: webhookEvent.eventId
+      })
+    }
+
+    return existingEvent
   }
 
   /**
    * Registra un evento de webhook en la base de datos
    * @param {Object} webhookEvent - Evento del webhook
    * @returns {Promise<WebhookEvent>} - Evento registrado
+   * 
+   * Nota: La idempotencia se verifica ANTES de llamar a este método
+   * en checkIdempotency(), por lo que este método asume que el evento
+   * no existe previamente.
    */
   async registerWebhookEvent (webhookEvent) {
     // Validar y sanitizar datos antes de guardar

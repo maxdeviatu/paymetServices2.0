@@ -1,5 +1,6 @@
 const InvoiceService = require('../services/invoices')
 const logger = require('../config/logger')
+const InvoiceProcessingJob = require('../jobs/invoiceProcessing')
 
 /**
  * Controlador para la gestión de facturas
@@ -82,12 +83,26 @@ class InvoicesController {
   async getInvoiceById (req, res) {
     try {
       const { id } = req.params
-      const invoiceId = parseInt(id, 10)
-
-      if (!invoiceId || invoiceId < 1) {
+      
+      // Log del ID recibido para debugging
+      logger.info(`🔍 Obteniendo factura por ID. ID recibido: "${id}" (tipo: ${typeof id})`)
+      
+      // Validación más robusta del ID
+      if (!id || id === 'undefined' || id === 'null') {
+        logger.warn(`❌ ID de factura no proporcionado: "${id}"`)
         return res.status(400).json({
           success: false,
-          message: 'ID de factura inválido'
+          message: 'ID de factura no proporcionado'
+        })
+      }
+
+      const invoiceId = parseInt(id, 10)
+      
+      if (isNaN(invoiceId) || invoiceId < 1) {
+        logger.warn(`❌ ID de factura inválido: "${id}" -> parseado como: ${invoiceId}`)
+        return res.status(400).json({
+          success: false,
+          message: `ID de factura inválido: "${id}". Debe ser un número mayor a 0.`
         })
       }
 
@@ -186,12 +201,26 @@ class InvoicesController {
   async updateInvoiceStatus (req, res) {
     try {
       const { id } = req.params
-      const invoiceId = parseInt(id, 10)
-
-      if (!invoiceId || invoiceId < 1) {
+      
+      // Log del ID recibido para debugging
+      logger.info(`🔍 Actualizando estado de factura. ID recibido: "${id}" (tipo: ${typeof id})`)
+      
+      // Validación más robusta del ID
+      if (!id || id === 'undefined' || id === 'null') {
+        logger.warn(`❌ ID de factura no proporcionado: "${id}"`)
         return res.status(400).json({
           success: false,
-          message: 'ID de factura inválido'
+          message: 'ID de factura no proporcionado'
+        })
+      }
+
+      const invoiceId = parseInt(id, 10)
+      
+      if (isNaN(invoiceId) || invoiceId < 1) {
+        logger.warn(`❌ ID de factura inválido: "${id}" -> parseado como: ${invoiceId}`)
+        return res.status(400).json({
+          success: false,
+          message: `ID de factura inválido: "${id}". Debe ser un número mayor a 0.`
         })
       }
 
@@ -285,6 +314,47 @@ class InvoicesController {
       res.status(500).json({
         success: false,
         message: 'Error obteniendo estadísticas de facturación'
+      })
+    }
+  }
+
+  /**
+   * Corrige el estado de transacciones que tienen facturas generadas pero están marcadas como FAILED
+   * @param {Object} req - Request object
+   * @param {Object} res - Response object
+   */
+  fixFailedInvoiceStatus = async (req, res) => {
+    try {
+      logger.logBusiness('invoices.fixFailedStatus', {
+        adminId: req.user.id
+      })
+
+      // Asegurar que el servicio esté inicializado
+      await this.invoiceService.initialize()
+
+      const result = await this.invoiceService.fixFailedInvoiceStatus()
+
+      logger.logBusiness('invoices.fixFailedStatus.success', {
+        adminId: req.user.id,
+        corrected: result.corrected,
+        totalChecked: result.totalChecked
+      })
+
+      res.status(200).json({
+        success: true,
+        message: 'Corrección de estados de facturación completada',
+        data: result
+      })
+    } catch (error) {
+      logger.logError(error, {
+        operation: 'invoices.fixFailedStatus',
+        adminId: req.user?.id
+      })
+
+      res.status(500).json({
+        success: false,
+        message: 'Error corrigiendo estados de facturación',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
       })
     }
   }

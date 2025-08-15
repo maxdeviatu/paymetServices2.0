@@ -381,6 +381,84 @@ class InvoiceService {
       throw error
     }
   }
+
+  /**
+   * Corrige el estado de transacciones que tienen facturas generadas pero están marcadas como FAILED
+   * @returns {Promise<Object>} Resultado de la corrección
+   */
+  async fixFailedInvoiceStatus () {
+    try {
+      logger.info('🔧 Iniciando corrección de estados de facturación...')
+
+      // Buscar transacciones con status PAID pero invoiceStatus FAILED
+      const failedTransactions = await Transaction.findAll({
+        where: {
+          status: 'PAID',
+          invoiceStatus: 'FAILED'
+        },
+        include: [
+          {
+            model: Invoice,
+            as: 'invoice',
+            required: false // LEFT JOIN para incluir transacciones sin factura
+          }
+        ]
+      })
+
+      logger.info(`🔍 Encontradas ${failedTransactions.length} transacciones con estado FAILED`)
+
+      let corrected = 0
+      let errors = []
+
+      for (const transaction of failedTransactions) {
+        try {
+          if (transaction.invoice) {
+            // La transacción tiene factura generada, corregir el estado
+            await transaction.update({
+              invoiceStatus: 'COMPLETED',
+              invoiceId: transaction.invoice.id
+            })
+
+            logger.info(`✅ Transacción ${transaction.id} corregida: FAILED → COMPLETED`)
+            corrected++
+          } else {
+            // La transacción no tiene factura, verificar si se puede generar
+            logger.info(`⚠️ Transacción ${transaction.id} no tiene factura, marcando como PENDING para reprocesamiento`)
+            
+            await transaction.update({
+              invoiceStatus: 'PENDING'
+            })
+            
+            corrected++
+          }
+        } catch (error) {
+          logger.error(`❌ Error corrigiendo transacción ${transaction.id}:`, error.message)
+          errors.push({
+            transactionId: transaction.id,
+            error: error.message
+          })
+        }
+      }
+
+      const result = {
+        totalChecked: failedTransactions.length,
+        corrected,
+        errors,
+        summary: {
+          correctedToCompleted: corrected - errors.length,
+          correctedToPending: errors.length > 0 ? errors.length : 0,
+          totalErrors: errors.length
+        }
+      }
+
+      logger.info('✅ Corrección de estados completada:', result)
+      return result
+
+    } catch (error) {
+      logger.error('❌ Error en corrección de estados de facturación:', error.message)
+      throw error
+    }
+  }
 }
 
 module.exports = InvoiceService

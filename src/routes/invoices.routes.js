@@ -57,4 +57,14 @@ router.put('/:id/status',
   invoicesController.updateInvoiceStatus
 )
 
+/**
+ * @route POST /api/invoices/fix-failed-status
+ * @desc Corregir estados de transacciones con facturas generadas pero marcadas como FAILED
+ * @access EDITOR+
+ */
+router.post('/fix-failed-status',
+  requireRole('EDITOR'),
+  invoicesController.fixFailedInvoiceStatus
+)
+
 module.exports = router

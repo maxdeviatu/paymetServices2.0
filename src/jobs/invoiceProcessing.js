@@ -1,5 +1,6 @@
 const InvoiceService = require('../services/invoices')
 const logger = require('../config/logger')
+const { Transaction, Invoice, Order, User, Product } = require('../models')
 
 /**
  * Job para el procesamiento automático de facturas
@@ -52,15 +53,21 @@ class InvoiceProcessingJob {
 
       logger.info('📋 Configuración del job:', config)
 
-      // Buscar transacciones en estado PENDING
+      // Buscar transacciones en estado PENDING para facturación
       const pendingTransactions = await Transaction.findAll({
         where: {
+          status: 'PAID',
           invoiceStatus: 'PENDING'
         },
         include: [{
           model: Order,
-          include: ['customer', 'product']
-        }]
+          as: 'order',
+          include: [
+            { model: User, as: 'customer' },
+            { model: Product, as: 'product' }
+          ]
+        }],
+        order: [['id', 'ASC']]
       })
 
       if (pendingTransactions.length === 0) {
@@ -87,34 +94,25 @@ class InvoiceProcessingJob {
           await transaction.update({ invoiceStatus: 'PROCESSING' })
 
           // Generar factura
-          const invoiceResult = await this.invoiceService.generateInvoice(transaction, config)
+          const invoice = await this.invoiceService.processTransaction(transaction, config.providerName)
 
-          if (invoiceResult.success) {
-            // Crear registro en tabla de facturas
-            const invoice = await Invoice.create({
-              transactionId: transaction.id,
-              providerInvoiceId: invoiceResult.providerInvoiceId,
-              provider: config.providerName,
-              amount: transaction.amount,
-              currency: transaction.currency,
-              metadata: invoiceResult.metadata
-            })
-
-            // Actualizar transacción como completada
+          if (invoice) {
+            // La factura ya fue creada por el servicio, solo actualizar el estado
             await transaction.update({
-              invoiceStatus: 'COMPLETED',
-              invoiceId: invoice.id
+              invoiceStatus: 'COMPLETED'
             })
 
             results.successful++
+            logger.info(`✅ Factura procesada exitosamente para transacción ${transaction.id}`)
           } else {
             // Marcar como fallida
             await transaction.update({ invoiceStatus: 'FAILED' })
             results.failed++
             results.errors.push({
               transactionId: transaction.id,
-              error: invoiceResult.error
+              error: 'No se pudo generar la factura'
             })
+            logger.error(`❌ Falló la generación de factura para transacción ${transaction.id}`)
           }
 
           results.processed++
