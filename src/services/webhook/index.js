@@ -109,9 +109,40 @@ class WebhookService {
 
               // Procesar el evento para actualizar la transacción
               try {
-                const result = await this.processEvent(webhookEvent, i)
-                results.push({ eventId: webhookEvent.eventId, eventIndex: i, status: 'processed' })
+                // Usar la misma lógica del flujo normal
+                const handler = this.getEventHandler(webhookEvent.type)
+                if (!handler) {
+                  throw new Error(`No handler found for event type: ${webhookEvent.type}`)
+                }
+
+                const result = await handler.handle(webhookEvent)
+
+                // Actualizar el registro del evento con el resultado
+                await this.updateWebhookEvent(existingEvent.id, {
+                  processedAt: new Date(),
+                  status: result.success ? 'PROCESSED' : 'FAILED',
+                  errorMessage: result.success ? null : result.reason
+                })
+
+                const eventResult = {
+                  eventIndex: i,
+                  eventId: webhookEvent.eventId,
+                  externalRef: webhookEvent.externalRef,
+                  status: result.success ? 'processed' : 'failed',
+                  ...result
+                }
+
+                results.push(eventResult)
                 processedEvents++
+
+                logger.info('WebhookService: Successfully processed duplicate event with status change', {
+                  eventIndex: i,
+                  eventId: webhookEvent.eventId,
+                  externalRef: webhookEvent.externalRef,
+                  type: webhookEvent.type,
+                  status: webhookEvent.status,
+                  result: result.success
+                })
               } catch (error) {
                 logger.error('WebhookService: Error processing duplicate event with status change', {
                   eventIndex: i,
