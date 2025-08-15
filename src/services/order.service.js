@@ -511,6 +511,7 @@ async function reviveOrder (orderId, reason = 'MANUAL', adminId = null) {
       // Actualizar transacción
       await validTransaction.update({
         status: 'PAID',
+        invoiceStatus: 'PENDING', // Las transacciones PAID deben tener invoiceStatus PENDING
         meta: {
           ...validTransaction.meta,
           revived: {

@@ -384,6 +384,10 @@ class InvoiceService {
 
   /**
    * Corrige el estado de transacciones que tienen facturas generadas pero están marcadas como FAILED
+   * 
+   * IMPORTANTE: Excluye automáticamente las transacciones de test que empiecen con "TEST" en gatewayRef
+   * Estas transacciones deben mantener su estado de facturación como NOT_REQUIRED
+   * 
    * @returns {Promise<Object>} Resultado de la corrección
    */
   async fixFailedInvoiceStatus () {
@@ -391,10 +395,14 @@ class InvoiceService {
       logger.info('🔧 Iniciando corrección de estados de facturación...')
 
       // Buscar transacciones con status PAID pero invoiceStatus FAILED
+      // Excluir transacciones de test que empiecen con "TEST"
       const failedTransactions = await Transaction.findAll({
         where: {
           status: 'PAID',
-          invoiceStatus: 'FAILED'
+          invoiceStatus: 'FAILED',
+          gatewayRef: {
+            [Op.notLike]: 'TEST%' // Excluir transacciones que empiecen con "TEST"
+          }
         },
         include: [
           {
@@ -405,7 +413,20 @@ class InvoiceService {
         ]
       })
 
-      logger.info(`🔍 Encontradas ${failedTransactions.length} transacciones con estado FAILED`)
+      // Contar cuántas transacciones de test fueron excluidas para transparencia
+      const totalFailedTransactions = await Transaction.count({
+        where: {
+          status: 'PAID',
+          invoiceStatus: 'FAILED'
+        }
+      })
+      
+      const testTransactionsExcluded = totalFailedTransactions - failedTransactions.length
+      if (testTransactionsExcluded > 0) {
+        logger.info(`🚫 Excluidas ${testTransactionsExcluded} transacciones de test (empiezan con "TEST")`)
+      }
+
+      logger.info(`🔍 Encontradas ${failedTransactions.length} transacciones con estado FAILED (excluyendo transacciones de test)`)
 
       let corrected = 0
       let errors = []
