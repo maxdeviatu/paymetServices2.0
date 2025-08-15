@@ -99,27 +99,43 @@ class WebhookService {
                 newStatus: webhookEvent.status,
                 existingEventId: existingEvent.id
               })
-              
-              // Continuar con el procesamiento normal para actualizar el estado
+
+              // Actualizar el evento existente en lugar de crear uno nuevo
+              await this.updateWebhookEvent(existingEvent.id, {
+                status: webhookEvent.status,
+                eventId: webhookEvent.eventId,
+                updatedAt: new Date()
+              })
+
+              // Procesar el evento para actualizar la transacción
+              try {
+                const result = await this.processEvent(webhookEvent, i)
+                results.push({ eventId: webhookEvent.eventId, eventIndex: i, status: 'processed' })
+                processedEvents++
+              } catch (error) {
+                logger.error('WebhookService: Error processing duplicate event with status change', {
+                  eventIndex: i,
+                  eventId: webhookEvent.eventId,
+                  externalRef: webhookEvent.externalRef,
+                  error: error.message,
+                  stack: error.stack
+                })
+                results.push({ eventId: webhookEvent.eventId, eventIndex: i, status: 'failed' })
+                failedEvents++
+              }
             } else {
-              // Estado igual, marcar como duplicado y saltar
-              logger.info('WebhookService: Event already processed (same status)', {
+              // Estado igual - marcar como duplicado y saltar
+              logger.info('WebhookService: Skipping duplicate event with same status', {
                 eventIndex: i,
                 eventId: webhookEvent.eventId,
                 externalRef: webhookEvent.externalRef,
-                provider: webhookEvent.provider,
-                status: webhookEvent.status
+                status: webhookEvent.status,
+                existingEventId: existingEvent.id
               })
-              
-              const duplicateResult = {
-                status: 'duplicate',
-                reason: 'same_status',
-                eventId: existingEvent.id,
-                eventIndex: i
-              }
-              results.push(duplicateResult)
-              continue
+              results.push({ eventId: webhookEvent.eventId, eventIndex: i, status: 'duplicate' })
+              duplicateEvents++
             }
+            continue
           }
 
           // 4.2 Registrar el evento en la base de datos
