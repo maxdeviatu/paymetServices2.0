@@ -63,8 +63,9 @@ class WebhookService {
 
       // 4. Procesar cada evento individualmente
       const results = []
-      const processedEvents = []
-      const failedEvents = []
+      let processedEvents = 0
+      let failedEvents = 0
+      let duplicateEvents = 0
 
       logger.info('WebhookService: Processing multiple events', {
         totalEvents: webhookEvents.length
