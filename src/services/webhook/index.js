@@ -63,8 +63,8 @@ class WebhookService {
 
       // 4. Procesar cada evento individualmente
       const results = []
-      let processedEvents = 0
-      let failedEvents = 0
+      const processedEvents = []
+      const failedEvents = []
       let duplicateEvents = 0
 
       logger.info('WebhookService: Processing multiple events', {
@@ -134,7 +134,7 @@ class WebhookService {
                 }
 
                 results.push(eventResult)
-                processedEvents++
+                processedEvents.push(eventResult)
 
                 logger.info('WebhookService: Successfully processed duplicate event with status change', {
                   eventIndex: i,
@@ -153,7 +153,7 @@ class WebhookService {
                   stack: error.stack
                 })
                 results.push({ eventId: webhookEvent.eventId, eventIndex: i, status: 'failed' })
-                failedEvents++
+                failedEvents.push({ eventId: webhookEvent.eventId, eventIndex: i, status: 'failed' })
               }
             } else {
               // Estado igual - marcar como duplicado y saltar
