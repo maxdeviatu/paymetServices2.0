@@ -82,23 +82,44 @@ class WebhookService {
           })
 
           // 4.1 Verificar idempotencia antes de procesar
+          // Si el evento ya existe:
+          // - Estado diferente: Procesar para actualizar la transacción
+          // - Estado igual: Marcar como duplicado y saltar
           const existingEvent = await this.checkIdempotency(webhookEvent)
           if (existingEvent) {
-            logger.info('WebhookService: Event already processed (idempotency check)', {
-              eventIndex: i,
-              eventId: webhookEvent.eventId,
-              externalRef: webhookEvent.externalRef,
-              provider: webhookEvent.provider
-            })
-            
-            const duplicateResult = {
-              status: 'duplicate',
-              reason: 'already_processed',
-              eventId: existingEvent.id,
-              eventIndex: i
+            // Verificar si el estado es diferente
+            if (existingEvent.status !== webhookEvent.status) {
+              // Procesar para actualizar el estado
+              logger.info('WebhookService: Processing duplicate with status change', {
+                eventIndex: i,
+                eventId: webhookEvent.eventId,
+                externalRef: webhookEvent.externalRef,
+                provider: webhookEvent.provider,
+                oldStatus: existingEvent.status,
+                newStatus: webhookEvent.status,
+                existingEventId: existingEvent.id
+              })
+              
+              // Continuar con el procesamiento normal para actualizar el estado
+            } else {
+              // Estado igual, marcar como duplicado y saltar
+              logger.info('WebhookService: Event already processed (same status)', {
+                eventIndex: i,
+                eventId: webhookEvent.eventId,
+                externalRef: webhookEvent.externalRef,
+                provider: webhookEvent.provider,
+                status: webhookEvent.status
+              })
+              
+              const duplicateResult = {
+                status: 'duplicate',
+                reason: 'same_status',
+                eventId: existingEvent.id,
+                eventIndex: i
+              }
+              results.push(duplicateResult)
+              continue
             }
-            results.push(duplicateResult)
-            continue
           }
 
           // 4.2 Registrar el evento en la base de datos
