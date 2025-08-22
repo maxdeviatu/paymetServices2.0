@@ -130,39 +130,112 @@ async function annul (code, actorId) {
 /**
  * Return a license to stock
  */
-async function returnToStock (code) {
+async function returnToStock (code, reason = 'MANUAL', adminId = null) {
   try {
-    logger.logBusiness('returnLicenseToStock', { code })
+    logger.logBusiness('returnLicenseToStock', { code, reason, adminId })
 
-    return await TransactionManager.executeInventoryTransaction(async (t) => {
+    return await TransactionManager.executeInventoryTransaction(async (dbTransaction) => {
+      // 1. Buscar la licencia original
       const license = await License.findOne({
         where: { licenseKey: code },
-        lock: t.LOCK.UPDATE,
-        transaction: t
+        lock: dbTransaction.LOCK.UPDATE,
+        transaction: dbTransaction
       })
 
-      if (!license || license.status !== 'SOLD') {
+      if (!license) {
+        throw new Error('License not found')
+      }
+
+      if (license.status !== 'SOLD') {
         throw new Error('Only SOLD licenses can be returned to stock')
       }
 
-      const updatedLicense = await license.update({
-        status: 'RETURNED',
-        orderId: null,
-        soldAt: null,
-        reservedAt: new Date()
-      }, { transaction: t })
+      if (!license.orderId) {
+        throw new Error('License is not associated with any order')
+      }
 
-      logger.logBusiness('returnLicenseToStock.success', {
-        licenseKey: code,
-        newStatus: updatedLicense.status
+      // 2. Buscar la orden
+      const { Order } = require('../models')
+      const order = await Order.findByPk(license.orderId, {
+        lock: dbTransaction.LOCK.UPDATE,
+        transaction: dbTransaction
       })
 
-      return updatedLicense
+      if (!order) {
+        throw new Error('Associated order not found')
+      }
+
+      // 3. Buscar la transacción PAID
+      const { Transaction } = require('../models')
+      const transaction = await Transaction.findOne({
+        where: {
+          orderId: license.orderId,
+          status: 'PAID'
+        },
+        lock: dbTransaction.LOCK.UPDATE,
+        transaction: dbTransaction
+      })
+
+      if (!transaction) {
+        throw new Error('Associated PAID transaction not found')
+      }
+
+      // 4. Usar la misma clave de licencia original
+      const newLicenseKey = code
+
+      // 5. Crear nueva licencia disponible
+      const newLicense = await License.create({
+        productRef: license.productRef,
+        licenseKey: newLicenseKey,
+        instructions: license.instructions,
+        status: 'AVAILABLE'
+      }, { transaction: dbTransaction })
+
+      // 6. Marcar licencia original como devuelta
+      const last5 = code.slice(-5)
+      const updatedLicense = await license.update({
+        licenseKey: `DEVUELTA-${last5}`,
+        // Mantener status, orderId, soldAt para historial
+      }, { transaction: dbTransaction })
+
+      // 7. Actualizar transacción a REFUNDED
+      await transaction.update({
+        status: 'REFUNDED',
+        meta: {
+          ...transaction.meta,
+          refunded: {
+            refundedAt: new Date().toISOString(),
+            reason: reason,
+            adminId: adminId,
+            originalLicenseKey: code,
+            newLicenseKey: newLicenseKey
+          }
+        }
+      }, { transaction: dbTransaction })
+
+      logger.logBusiness('returnLicenseToStock.success', {
+        originalLicenseKey: code,
+        returnedLicenseKey: updatedLicense.licenseKey,
+        newAvailableLicenseKey: newLicense.licenseKey,
+        orderId: license.orderId,
+        transactionId: transaction.id,
+        reason: reason,
+        adminId: adminId
+      })
+
+      return {
+        returnedLicense: updatedLicense,
+        newAvailableLicense: newLicense,
+        transaction: transaction,
+        order: order
+      }
     })
   } catch (error) {
     logger.logError(error, {
       operation: 'returnLicenseToStock',
-      code
+      code,
+      reason,
+      adminId
     })
     throw error
   }
@@ -177,8 +250,28 @@ async function bulkImport (rows) {
       totalRows: rows.length
     })
 
-    // Get unique product references from the CSV
-    const uniqueProductRefs = [...new Set(rows.map(row => row.productRef))]
+    // Filter out empty or invalid rows
+    const validRows = rows.filter(row => {
+      return row.productRef && 
+             row.productRef.trim() !== '' && 
+             row.licenseKey && 
+             row.licenseKey.trim() !== ''
+    })
+
+    if (validRows.length === 0) {
+      throw new Error('No valid rows found in CSV. All rows must have productRef and licenseKey.')
+    }
+
+    if (validRows.length !== rows.length) {
+      logger.logBusiness('bulkImportLicenses.filtered', {
+        originalRows: rows.length,
+        validRows: validRows.length,
+        filteredRows: rows.length - validRows.length
+      })
+    }
+
+    // Get unique product references from the valid CSV rows
+    const uniqueProductRefs = [...new Set(validRows.map(row => row.productRef))]
 
     // Verify all products exist and support licenses
     const products = await Product.findAll({
@@ -201,13 +294,14 @@ async function bulkImport (rows) {
       throw new Error(`Products do not support licenses: ${nonLicenseProducts.join(', ')}. Set license_type to true first.`)
     }
 
-    const result = await License.bulkCreate(rows, {
+    const result = await License.bulkCreate(validRows, {
       ignoreDuplicates: true
     })
 
     logger.logBusiness('bulkImportLicenses.success', {
       imported: result.length,
-      totalRows: rows.length
+      totalRows: validRows.length,
+      originalRows: rows.length
     })
 
     return result

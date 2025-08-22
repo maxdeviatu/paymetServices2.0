@@ -163,21 +163,69 @@ exports.annul = async (req, res) => {
  */
 exports.return = async (req, res) => {
   try {
-    const license = await service.returnToStock(req.params.code)
+    const { reason = 'MANUAL' } = req.body
+    const adminId = req.admin?.id || req.user?.id
+
+    if (!adminId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Admin authentication required'
+      })
+    }
+
+    const result = await service.returnToStock(req.params.code, reason, adminId)
 
     res.json({
       success: true,
-      data: license,
-      message: 'License returned to stock successfully'
+      data: {
+        returnedLicense: {
+          id: result.returnedLicense.id,
+          licenseKey: result.returnedLicense.licenseKey,
+          status: result.returnedLicense.status,
+          orderId: result.returnedLicense.orderId,
+          soldAt: result.returnedLicense.soldAt
+        },
+        newAvailableLicense: {
+          id: result.newAvailableLicense.id,
+          licenseKey: result.newAvailableLicense.licenseKey,
+          status: result.newAvailableLicense.status,
+          productRef: result.newAvailableLicense.productRef
+        },
+        transaction: {
+          id: result.transaction.id,
+          status: result.transaction.status,
+          refundedAt: result.transaction.meta?.refunded?.refundedAt
+        },
+        order: {
+          id: result.order.id,
+          status: result.order.status,
+          productRef: result.order.productRef
+        }
+      },
+      message: 'License returned successfully. New license available for sale.'
     })
   } catch (error) {
     logger.logError(error, {
       operation: 'returnLicense',
-      code: req.params.code
+      code: req.params.code,
+      reason: req.body.reason,
+      adminId: req.admin?.id || req.user?.id
     })
-    res.status(400).json({
+
+    let statusCode = 400
+    let message = error.message
+
+    if (error.message.includes('not found')) {
+      statusCode = 404
+    } else if (error.message.includes('Only SOLD licenses')) {
+      statusCode = 400
+    } else if (error.message.includes('authentication')) {
+      statusCode = 401
+    }
+
+    res.status(statusCode).json({
       success: false,
-      message: error.message
+      message: message
     })
   }
 }
