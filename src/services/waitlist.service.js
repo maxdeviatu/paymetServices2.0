@@ -311,23 +311,22 @@ class WaitlistService {
         customerEmail: entry.order.customer.email
       })
 
-      // Usar la cola de emails para mejor confiabilidad
-      await emailQueueService.queueLicenseEmail({
+      // Enviar email directamente (emailQueueService v2.0 no tiene queueLicenseEmail)
+      await emailService.sendLicenseEmail({
         customer: entry.order.customer,
         product: entry.order.product,
         license: entry.license,
         order: entry.order
       })
 
-      // ✅ EMAIL EN COLA - AHORA SÍ COMPLETAR TODO
-      // El sistema de cola se encarga del envío real
+      // ✅ EMAIL ENVIADO - AHORA SÍ COMPLETAR TODO
       await this.completeOrderAfterEmailSent(entry)
 
-      logger.logBusiness('waitlist:emailProcess.emailQueued', {
+      logger.logBusiness('waitlist:emailProcess.emailSent', {
         waitlistEntryId: entry.id,
         orderId: entry.orderId,
         customerEmail: entry.order.customer.email,
-        message: 'License email queued and order completed successfully'
+        message: 'License email sent and order completed successfully'
       })
     } catch (error) {
       // Revertir a READY_FOR_EMAIL para reintentar
