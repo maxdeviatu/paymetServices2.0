@@ -180,22 +180,20 @@ async function returnToStock (code, reason = 'MANUAL', adminId = null) {
         throw new Error('Associated PAID transaction not found')
       }
 
-      // 4. Usar la misma clave de licencia original
-      const newLicenseKey = code
+      // 4. Marcar licencia original como devuelta PRIMERO
+      const last5 = code.slice(-5)
+      const updatedLicense = await license.update({
+        licenseKey: `DEVUELTA-${last5}`,
+        // Mantener status, orderId, soldAt para historial
+      }, { transaction: dbTransaction })
 
-      // 5. Crear nueva licencia disponible
+      // 5. Crear nueva licencia disponible con la clave original
+      const newLicenseKey = code
       const newLicense = await License.create({
         productRef: license.productRef,
         licenseKey: newLicenseKey,
         instructions: license.instructions,
         status: 'AVAILABLE'
-      }, { transaction: dbTransaction })
-
-      // 6. Marcar licencia original como devuelta
-      const last5 = code.slice(-5)
-      const updatedLicense = await license.update({
-        licenseKey: `DEVUELTA-${last5}`,
-        // Mantener status, orderId, soldAt para historial
       }, { transaction: dbTransaction })
 
       // 7. Actualizar transacción a REFUNDED

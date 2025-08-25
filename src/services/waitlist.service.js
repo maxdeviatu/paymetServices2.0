@@ -212,10 +212,12 @@ class WaitlistService {
         include: [
           {
             association: 'order',
-            include: ['customer', 'product']
+            include: ['customer', 'product'],
+            required: true
           },
           {
-            association: 'license'
+            association: 'license',
+            required: true
           }
         ],
         order: [['priority', 'ASC']] // FIFO - el más antiguo primero
@@ -282,6 +284,23 @@ class WaitlistService {
    */
   async processWaitlistEntryWithEmail (entry) {
     try {
+      // Validar que todos los datos necesarios están disponibles
+      if (!entry.order) {
+        throw new Error('Order data not available')
+      }
+      if (!entry.order.customer) {
+        throw new Error('Customer data not available')
+      }
+      if (!entry.order.product) {
+        throw new Error('Product data not available')
+      }
+      if (!entry.license) {
+        throw new Error('License data not available')
+      }
+      if (!entry.order.customer.email) {
+        throw new Error('Customer email not available')
+      }
+
       // Marcar como PROCESSING
       await entry.update({ status: 'PROCESSING' })
 
@@ -289,27 +308,34 @@ class WaitlistService {
         waitlistEntryId: entry.id,
         orderId: entry.orderId,
         licenseId: entry.licenseId,
-        customerEmail: entry.order?.customer?.email
+        customerEmail: entry.order.customer.email
       })
 
-      // Enviar email directamente (sin cola, ya que controlamos el flujo)
-      await emailService.sendLicenseEmail({
+      // Usar la cola de emails para mejor confiabilidad
+      await emailQueueService.queueLicenseEmail({
         customer: entry.order.customer,
         product: entry.order.product,
         license: entry.license,
         order: entry.order
       })
 
-      // ✅ EMAIL ENVIADO EXITOSAMENTE - AHORA SÍ COMPLETAR TODO
+      // ✅ EMAIL EN COLA - AHORA SÍ COMPLETAR TODO
+      // El sistema de cola se encarga del envío real
       await this.completeOrderAfterEmailSent(entry)
 
-      logger.logBusiness('waitlist:emailProcess.emailSent', {
+      logger.logBusiness('waitlist:emailProcess.emailQueued', {
         waitlistEntryId: entry.id,
         orderId: entry.orderId,
         customerEmail: entry.order.customer.email,
-        message: 'License email sent and order completed successfully'
+        message: 'License email queued and order completed successfully'
       })
     } catch (error) {
+      // Revertir a READY_FOR_EMAIL para reintentar
+      await entry.update({ 
+        status: 'READY_FOR_EMAIL',
+        errorMessage: error.message
+      })
+      
       logger.logError(error, {
         operation: 'processSingleEmailEntry',
         waitlistEntryId: entry.id,
