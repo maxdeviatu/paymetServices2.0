@@ -226,3 +226,50 @@ exports.runJob = async (req, res) => {
     })
   }
 }
+
+// Variable para evitar ejecuciones concurrentes del procesamiento manual completo
+let isManualRunInProgress = false
+
+/**
+ * Ejecutar procesamiento manual completo de lista de espera
+ * Procesa TODAS las entradas PENDING → reserva licencias → envía emails → marca COMPLETED
+ */
+exports.runFullProcessing = async (req, res) => {
+  if (isManualRunInProgress) {
+    return res.status(409).json({
+      success: false,
+      message: 'A manual processing run is already in progress'
+    })
+  }
+
+  isManualRunInProgress = true
+  const startedAt = new Date()
+
+  try {
+    const WaitlistProcessingJob = require('../jobs/waitlistProcessing')
+    const job = new WaitlistProcessingJob()
+
+    // Ejecuta el flujo completo ya existente
+    const result = await job.executeManual()
+
+    return res.json({
+      success: true,
+      message: 'Manual waitlist processing completed',
+      meta: {
+        startedAt,
+        finishedAt: new Date()
+      },
+      data: result
+    })
+  } catch (error) {
+    logger.logError(error, {
+      operation: 'runFullProcessing'
+    })
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    })
+  } finally {
+    isManualRunInProgress = false
+  }
+}

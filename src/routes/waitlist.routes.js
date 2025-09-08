@@ -20,5 +20,6 @@ router.delete('/:waitlistEntryId', requireRole('EDITOR'), ctrl.removeFromWaitlis
 // Rutas de administración - requieren rol SUPER_ADMIN
 router.get('/job/status', requireRole('SUPER_ADMIN'), ctrl.getJobStatus)
 router.post('/job/run', requireRole('SUPER_ADMIN'), ctrl.runJob)
+router.post('/process-all', requireRole('SUPER_ADMIN'), ctrl.runFullProcessing)
 
 module.exports = router

@@ -70,6 +70,153 @@ class WaitlistProcessingJob {
   }
 
   /**
+   * Ejecutar procesamiento completo manual - procesa TODAS las entradas READY_FOR_EMAIL
+   */
+  async executeManual () {
+    if (this.isRunning) {
+      logger.info('WaitlistProcessingJob: Already running, skipping manual execution')
+      return { skipped: true, reason: 'Already running' }
+    }
+
+    this.isRunning = true
+    const startTime = Date.now()
+
+    try {
+      logger.logBusiness('job:waitlistProcessing.manualStart', {
+        timestamp: new Date().toISOString()
+      })
+
+      // Paso 1: Reservar automáticamente licencias disponibles para entradas PENDING
+      const reserveResults = await this.autoReserveLicenses()
+
+      // Paso 2: Procesar TODAS las entradas READY_FOR_EMAIL existentes
+      const processResults = await this.processAllReadyForEmail()
+
+      const duration = Date.now() - startTime
+      const combinedResults = {
+        ...processResults,
+        autoReserved: reserveResults.totalReserved,
+        autoReserveDetails: reserveResults.details
+      }
+
+      logger.logBusiness('job:waitlistProcessing.manualCompleted', {
+        duration: `${duration}ms`,
+        ...combinedResults
+      })
+
+      return {
+        success: true,
+        duration,
+        ...combinedResults
+      }
+    } catch (error) {
+      const duration = Date.now() - startTime
+
+      logger.logError(error, {
+        operation: 'waitlistProcessing.executeManual',
+        duration: `${duration}ms`
+      })
+
+      return {
+        success: false,
+        duration,
+        error: error.message
+      }
+    } finally {
+      this.isRunning = false
+    }
+  }
+
+  /**
+   * Procesar todas las entradas READY_FOR_EMAIL (para ejecución manual)
+   */
+  async processAllReadyForEmail () {
+    try {
+      const { WaitlistEntry } = require('../models')
+      
+      // Obtener TODAS las entradas READY_FOR_EMAIL
+      const readyEntries = await WaitlistEntry.findAll({
+        where: {
+          status: 'READY_FOR_EMAIL'
+        },
+        include: [
+          {
+            association: 'order',
+            include: ['customer', 'product'],
+            required: true
+          },
+          {
+            association: 'license',
+            required: true
+          }
+        ],
+        order: [['priority', 'ASC']] // FIFO - más antiguos primero
+      })
+
+      const results = {
+        processed: 0,
+        failed: 0,
+        queued: 0,
+        errors: [],
+        total: readyEntries.length
+      }
+
+      logger.logBusiness('job:waitlistProcessing.processAllReadyForEmail', {
+        totalEntries: readyEntries.length
+      })
+
+      // Procesar cada entrada
+      for (const entry of readyEntries) {
+        try {
+          await waitlistService.processWaitlistEntryWithEmail(entry)
+          results.processed++
+          results.queued++
+
+          logger.logBusiness('job:waitlistProcessing.entryProcessed', {
+            waitlistEntryId: entry.id,
+            orderId: entry.orderId,
+            customerEmail: entry.order?.customer?.email
+          })
+        } catch (error) {
+          logger.logError(error, {
+            operation: 'processWaitlistEntryWithEmail',
+            waitlistEntryId: entry.id,
+            orderId: entry.orderId
+          })
+
+          // Incrementar contador de fallos en la entrada si excede reintentos
+          if (entry.retryCount >= 3) {
+            await entry.update({
+              status: 'FAILED',
+              errorMessage: error.message
+            })
+            results.failed++
+          } else {
+            await entry.update({
+              retryCount: entry.retryCount + 1,
+              errorMessage: error.message
+            })
+          }
+
+          results.errors.push({
+            waitlistEntryId: entry.id,
+            orderId: entry.orderId,
+            error: error.message
+          })
+        }
+      }
+
+      logger.logBusiness('job:waitlistProcessing.processAllReadyForEmailCompleted', results)
+      return results
+    } catch (error) {
+      logger.logError(error, {
+        operation: 'processAllReadyForEmail'
+      })
+      throw error
+    }
+  }
+
+  /**
    * Reservar automáticamente licencias disponibles para entradas PENDING
    */
   async autoReserveLicenses () {
