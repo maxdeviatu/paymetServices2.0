@@ -124,6 +124,14 @@ class SiigoProvider {
         mail: this.defaultConfig.mailEnabled
       }
 
+      logger.info('📋 Configuración de envío de factura:', {
+        transactionId: transaction.id,
+        stampEnabled: this.defaultConfig.stampEnabled,
+        mailEnabled: this.defaultConfig.mailEnabled,
+        willSendToDian: this.defaultConfig.stampEnabled,
+        willSendEmail: this.defaultConfig.mailEnabled
+      })
+
       logger.debug('📋 Datos de factura a enviar:', JSON.stringify(invoiceData, null, 2))
 
       // Enviar solicitud a Siigo
@@ -136,11 +144,80 @@ class SiigoProvider {
       })
 
       const invoice = response.data
+      
+      // Log detallado del estado de envío a DIAN y correo
+      const dianStatus = invoice.stamp?.status || 'N/A'
+      const mailStatus = invoice.mail?.status || 'N/A'
+      
       logger.info('✅ Factura creada exitosamente en Siigo:', {
         siigoInvoiceId: invoice.id,
         invoiceNumber: invoice.number,
-        transactionId: transaction.id
+        transactionId: transaction.id,
+        dianStatus: dianStatus,
+        dianSent: this.defaultConfig.stampEnabled,
+        dianAccepted: dianStatus === 'Accepted',
+        mailStatus: mailStatus,
+        mailSent: this.defaultConfig.mailEnabled,
+        mailDelivered: mailStatus === 'sent'
       })
+
+      // Log específico sobre el estado de DIAN
+      if (this.defaultConfig.stampEnabled) {
+        if (dianStatus === 'Accepted') {
+          logger.info('✅ Factura aceptada por la DIAN:', {
+            transactionId: transaction.id,
+            invoiceNumber: invoice.number,
+            cufe: invoice.stamp?.cufe || 'N/A'
+          })
+        } else if (dianStatus === 'Rejected') {
+          logger.warn('⚠️ Factura rechazada por la DIAN:', {
+            transactionId: transaction.id,
+            invoiceNumber: invoice.number,
+            rejectionReason: invoice.stamp?.rejection_reason || 'Razón no especificada'
+          })
+        } else if (dianStatus === 'Draft') {
+          logger.warn('⚠️ Factura en estado Draft (no enviada a DIAN):', {
+            transactionId: transaction.id,
+            invoiceNumber: invoice.number,
+            note: 'La factura fue creada pero no se envió a la DIAN'
+          })
+        } else {
+          logger.info('ℹ️ Estado de DIAN:', {
+            transactionId: transaction.id,
+            invoiceNumber: invoice.number,
+            status: dianStatus
+          })
+        }
+      } else {
+        logger.warn('⚠️ Envío a DIAN deshabilitado (stamp: false):', {
+          transactionId: transaction.id,
+          invoiceNumber: invoice.number,
+          note: 'La factura NO se enviará a la DIAN automáticamente'
+        })
+      }
+
+      // Log específico sobre el estado del correo
+      if (this.defaultConfig.mailEnabled) {
+        if (mailStatus === 'sent') {
+          logger.info('✅ Factura enviada por correo al cliente:', {
+            transactionId: transaction.id,
+            invoiceNumber: invoice.number,
+            customerEmail: customer.email
+          })
+        } else {
+          logger.warn('⚠️ Factura no enviada por correo:', {
+            transactionId: transaction.id,
+            invoiceNumber: invoice.number,
+            mailStatus: mailStatus,
+            customerEmail: customer.email
+          })
+        }
+      } else {
+        logger.info('ℹ️ Envío por correo deshabilitado (mail: false):', {
+          transactionId: transaction.id,
+          invoiceNumber: invoice.number
+        })
+      }
 
       return {
         providerInvoiceId: invoice.id.toString(),
