@@ -28,7 +28,7 @@ class CobreCheckoutService {
         amount: params.amount,
         external_id: params.externalId,
         destination_id: account.id,
-        checkout_rails: ['pse', 'bancolombia', 'nequi'],
+        checkout_rails: ['pse', 'bancolombia', 'nequi', 'breb'],
         checkout_header: params.header || 'Innovate Learning - Pago de Licencia',
         checkout_item: params.item || 'Licencia Digital',
         description_to_payee: params.description || 'Pago de licencia digital',

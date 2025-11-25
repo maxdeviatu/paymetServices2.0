@@ -140,7 +140,7 @@ class CobreProvider {
         amount: Math.round(order.grandTotal), // Convert to minor units if needed
         external_id: externalId, // Standardized format: {productRef}-cobre-{orderId}-{dateTime}
         destination_id: account.id,
-        checkout_rails: ['pse', 'bancolombia', 'nequi'], // All available methods for Colombia
+        checkout_rails: ['pse', 'bancolombia', 'nequi', 'breb'], // All available methods for Colombia
         checkout_header: this.sanitizeForCobre(product?.name || 'Innovate Learning').substring(0, 30), // Max 30 characters, sanitized
         checkout_item: this.sanitizeForCobre(`Licencia ${(product?.name || 'Producto')}`).substring(0, 40), // License description, max 40 chars, sanitized
         description_to_payee: this.sanitizeForCobre('Pago Innovate Learning').substring(0, 40), // Standardized description for better visibility
