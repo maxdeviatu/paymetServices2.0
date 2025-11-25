@@ -21,6 +21,8 @@ class SiigoProvider {
       documentId: parseInt(process.env.SIIGO_SALES_DOCUMENT_ID, 10),
       sellerId: parseInt(process.env.SIIGO_SELLER_ID, 10),
       paymentTypeId: parseInt(process.env.SIIGO_PAYMENT_TYPE_ID, 10),
+      stampEnabled: process.env.SIIGO_STAMP_ENABLED !== 'false', // true por defecto
+      mailEnabled: process.env.SIIGO_MAIL_ENABLED !== 'false', // true por defecto
       defaultCustomer: {
         person_type: 'Person',
         id_type: '13',
@@ -89,10 +91,17 @@ class SiigoProvider {
       // Obtener token de autenticación
       const token = await this.authService.getAccessToken()
 
+      // Validar fecha para facturas electrónicas (no puede ser anterior a hoy)
+      const invoiceDate = new Date().toISOString().slice(0, 10)
+      const today = new Date().toISOString().slice(0, 10)
+      if (invoiceDate < today) {
+        throw new Error('La fecha de la factura electrónica no puede ser anterior a la fecha actual')
+      }
+
       // Construir datos de la factura
       const invoiceData = {
         document: { id: this.defaultConfig.documentId },
-        date: new Date().toISOString().slice(0, 10),
+        date: invoiceDate,
         customer: siigoCustomer,
         seller: this.defaultConfig.sellerId,
         items: [
@@ -110,7 +119,9 @@ class SiigoProvider {
             value: transaction.amount / 100, // Convertir de centavos a pesos
             due_date: new Date().toISOString().slice(0, 10) // Fecha de vencimiento (mismo día)
           }
-        ]
+        ],
+        stamp: this.defaultConfig.stampEnabled,
+        mail: this.defaultConfig.mailEnabled
       }
 
       logger.debug('📋 Datos de factura a enviar:', JSON.stringify(invoiceData, null, 2))
