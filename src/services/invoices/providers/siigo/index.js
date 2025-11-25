@@ -119,9 +119,19 @@ class SiigoProvider {
             value: transaction.amount / 100, // Convertir de centavos a pesos
             due_date: new Date().toISOString().slice(0, 10) // Fecha de vencimiento (mismo día)
           }
-        ],
-        stamp: this.defaultConfig.stampEnabled,
-        mail: this.defaultConfig.mailEnabled
+        ]
+      }
+
+      // Agregar campo stamp solo si está habilitado
+      // Según la documentación de Siigo, stamp debe ser un objeto con propiedad "send"
+      if (this.defaultConfig.stampEnabled) {
+        invoiceData.stamp = { send: true }
+      }
+
+      // Agregar campo mail solo si está habilitado
+      // Según la documentación de Siigo, mail debe ser un objeto con propiedad "send"
+      if (this.defaultConfig.mailEnabled) {
+        invoiceData.mail = { send: true }
       }
 
       logger.info('📋 Configuración de envío de factura:', {
