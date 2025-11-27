@@ -114,18 +114,19 @@ async function getOrCreateCustomer (customerData, transaction) {
     throw new Error('Either email or documentNumber is required')
   }
 
-  // Try to find existing user
-  let user = null
+  // Try to find existing user by email and document separately
+  let userByEmail = null
+  let userByDocument = null
 
   if (email) {
-    user = await User.findOne({
-      where: { email },
+    userByEmail = await User.findOne({
+      where: { email: email.toLowerCase() },
       transaction
     })
   }
 
-  if (!user && documentType && documentNumber) {
-    user = await User.findOne({
+  if (documentType && documentNumber) {
+    userByDocument = await User.findOne({
       where: {
         document_type: documentType,
         document_number: documentNumber
@@ -134,13 +135,80 @@ async function getOrCreateCustomer (customerData, transaction) {
     })
   }
 
-  // If user exists, return their ID
-  if (user) {
+  // Validate consistency: if both searches found users, they must be the same
+  if (userByEmail && userByDocument) {
+    if (userByEmail.id !== userByDocument.id) {
+      // Conflict: same email belongs to different user than same document
+      logger.logError(new Error('Data conflict detected'), {
+        operation: 'getOrCreateCustomer',
+        email,
+        documentType,
+        documentNumber,
+        userByEmailId: userByEmail.id,
+        userByDocumentId: userByDocument.id
+      })
+      throw new Error('El correo electrónico y el documento de identidad pertenecen a usuarios diferentes. Por favor, verifica tus datos.')
+    }
+    // Both match, use the user
+    const user = userByEmail
     logger.logBusiness('customer:found', {
       userId: user.id,
-      email: user.email
+      email: user.email,
+      documentType: user.document_type,
+      documentNumber: user.document_number
     })
     return user.id
+  }
+
+  // If found by email only, validate document matches
+  if (userByEmail) {
+    if (documentType && documentNumber) {
+      // Validate that document matches
+      if (userByEmail.document_type !== documentType || userByEmail.document_number !== documentNumber) {
+        logger.logError(new Error('Email exists but document does not match'), {
+          operation: 'getOrCreateCustomer',
+          email,
+          existingDocumentType: userByEmail.document_type,
+          existingDocumentNumber: userByEmail.document_number,
+          providedDocumentType: documentType,
+          providedDocumentNumber: documentNumber
+        })
+        throw new Error(`El correo electrónico ${email} ya está registrado con un documento de identidad diferente. Por favor, verifica tus datos o usa otro correo.`)
+      }
+    }
+    // Email matches and document matches (or not provided)
+    logger.logBusiness('customer:found', {
+      userId: userByEmail.id,
+      email: userByEmail.email,
+      documentType: userByEmail.document_type,
+      documentNumber: userByEmail.document_number
+    })
+    return userByEmail.id
+  }
+
+  // If found by document only, validate email matches
+  if (userByDocument) {
+    if (email) {
+      // Validate that email matches
+      if (userByDocument.email.toLowerCase() !== email.toLowerCase()) {
+        logger.logError(new Error('Document exists but email does not match'), {
+          operation: 'getOrCreateCustomer',
+          documentType,
+          documentNumber,
+          existingEmail: userByDocument.email,
+          providedEmail: email
+        })
+        throw new Error(`El documento de identidad ${documentType} ${documentNumber} ya está registrado con un correo electrónico diferente. Por favor, verifica tus datos o usa otro documento.`)
+      }
+    }
+    // Document matches and email matches (or not provided)
+    logger.logBusiness('customer:found', {
+      userId: userByDocument.id,
+      email: userByDocument.email,
+      documentType: userByDocument.document_type,
+      documentNumber: userByDocument.document_number
+    })
+    return userByDocument.id
   }
 
   // Create new user
