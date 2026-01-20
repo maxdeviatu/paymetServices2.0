@@ -1,5 +1,9 @@
 # API de Órdenes y Transacciones - Guía de Testing
 
+> **⚠️ NOTA IMPORTANTE**: Este documento es una **guía de testing** con Postman. Para información técnica detallada sobre transacciones y webhooks validada contra el código fuente, consulte:
+> - **[TRANSACTIONS_COMPLETE.md](./TRANSACTIONS_COMPLETE.md)** - Sistema de transacciones (fuente de verdad)
+> - **[WEBHOOKS_COMPLETE.md](./WEBHOOKS_COMPLETE.md)** - Sistema de webhooks (fuente de verdad)
+
 ## Descripción General
 
 Esta documentación describe cómo usar y probar el sistema de órdenes y transacciones usando Postman. El sistema permite crear órdenes, procesar pagos y gestionar licencias digitales de forma automática.

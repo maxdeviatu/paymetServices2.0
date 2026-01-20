@@ -4,9 +4,46 @@ Bienvenido a la documentación técnica del sistema de pagos de Innovate Learnin
 
 ## 📋 Índice de Documentación
 
-### **🔌 Webhooks y Procesamiento de Pagos**
-- **[WEBHOOKS.md](./WEBHOOKS.md)** - Documentación completa del sistema de webhooks
-- **[WEBHOOK_FLOW_DIAGRAM.md](./WEBHOOK_FLOW_DIAGRAM.md)** - Diagramas detallados del flujo de webhooks
+### **⚠️ Documentos Consolidados - Fuente de Verdad**
+
+Estos documentos han sido **validados exhaustivamente contra el código fuente** y son la única referencia confiable para desarrolladores:
+
+- **[WEBHOOKS_COMPLETE.md](./WEBHOOKS_COMPLETE.md)** ⭐ - Documentación completa y consolidada del sistema de webhooks
+  - ✅ Validado contra código fuente
+  - ✅ Única fuente de verdad para webhooks
+  - ✅ Referencia autorizada para desarrolladores externos
+
+- **[TRANSACTIONS_COMPLETE.md](./TRANSACTIONS_COMPLETE.md)** ⭐ - Documentación completa del sistema de transacciones, TransactionManager y verificación de estado
+  - ✅ Validado contra código fuente
+  - ✅ Única fuente de verdad para transacciones
+  - ✅ Referencia autorizada para desarrolladores externos
+
+### **📚 Documentación General**
+
+Los siguientes documentos proporcionan información general y pueden no estar completamente actualizados. Para detalles técnicos exactos, consulte los documentos consolidados arriba:
+
+- `sistema-pagos.md` - Visión general del sistema de pagos
+- `api-ordenes-transacciones.md` - Guía de testing con Postman
+- `cobre-integration.md` - Integración con Cobre
+- `epayco-integration.md` - Integración con ePayco
+- `licencias-carga-masiva.md` - Carga masiva de licencias
+- `productos.md` - Gestión de productos
+- `descuentos.md` - Sistema de descuentos
+- `usuarios.md` - Gestión de usuarios
+- `administradores.md` - Gestión de administradores
+- `autenticacion.md` - Sistema de autenticación
+- `AUTHENTICATION_SECURITY.md` - Seguridad y autenticación
+- `email-queue-system.md` - Sistema de cola de emails
+- `email-retry-job.md` - Reintentos de emails
+- `lista-espera.md` - Sistema de lista de espera
+- `revive-order-endpoint.md` - Endpoint de reactivación de órdenes
+- `setup-integration.md` - Configuración de integraciones
+- `productos-licencias-integracion.md` - Integración productos-licencias
+- `cambio-licencias.md` - Cambio de licencias
+
+### **✅ Validación de Documentación**
+
+- **[DOCUMENTACION_VALIDACION.md](./DOCUMENTACION_VALIDACION.md)** - Criterios de validación y estado de los documentos consolidados
 
 ### **🏗️ Arquitectura del Sistema**
 - **[README.md](../README.md)** - Documentación general del proyecto
@@ -79,8 +116,8 @@ PAID → PAID → Detectado como duplicado → Saltado
 ## 📖 Cómo Usar Esta Documentación
 
 ### **Para Desarrolladores:**
-1. Comenzar con **[WEBHOOKS.md](./WEBHOOKS.md)** para entender el sistema
-2. Revisar **[WEBHOOK_FLOW_DIAGRAM.md](./WEBHOOK_FLOW_DIAGRAM.md)** para flujos detallados
+1. Comenzar con **[WEBHOOKS_COMPLETE.md](./WEBHOOKS_COMPLETE.md)** para entender el sistema completo
+2. Revisar la sección de arquitectura y flujos de procesamiento
 3. Consultar troubleshooting para resolver problemas
 
 ### **Para DevOps:**
@@ -89,8 +126,8 @@ PAID → PAID → Detectado como duplicado → Saltado
 3. Implementar alertas para fallos críticos
 
 ### **Para Producto:**
-1. Entender casos de uso en **[WEBHOOKS.md](./WEBHOOKS.md)**
-2. Revisar flujos de usuario en diagramas
+1. Entender casos de uso en **[WEBHOOKS_COMPLETE.md](./WEBHOOKS_COMPLETE.md)**
+2. Revisar flujos de procesamiento y endpoints
 3. Identificar puntos de mejora en la experiencia
 
 ## 🔄 Actualizaciones Recientes
@@ -111,7 +148,7 @@ PAID → PAID → Detectado como duplicado → Saltado
 
 ### **Para Problemas Técnicos:**
 - Revisar logs: `pm2 logs payment-service`
-- Consultar troubleshooting en **[WEBHOOKS.md](./WEBHOOKS.md)**
+- Consultar troubleshooting en **[WEBHOOKS_COMPLETE.md](./WEBHOOKS_COMPLETE.md)**
 - Verificar configuración en **[VARIABLES_ENTORNO.md](../VARIABLES_ENTORNO.md)**
 
 ### **Para Mejoras y Nuevas Funcionalidades:**

@@ -1,5 +1,9 @@
 # Integración con Cobre - Documentación
 
+> **⚠️ NOTA IMPORTANTE**: Este documento describe la integración con Cobre. Para información técnica detallada sobre webhooks y transacciones validada contra el código fuente, consulte:
+> - **[WEBHOOKS_COMPLETE.md](./WEBHOOKS_COMPLETE.md)** - Sistema de webhooks (fuente de verdad) - Incluye detalles específicos de Cobre
+> - **[TRANSACTIONS_COMPLETE.md](./TRANSACTIONS_COMPLETE.md)** - Sistema de transacciones (fuente de verdad)
+
 ## 📋 Descripción
 
 Esta documentación describe la integración completa con el proveedor de pagos Cobre, incluyendo autenticación, creación de checkouts, webhooks y suscripciones automáticas.
@@ -330,5 +334,5 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
 ## 📚 Referencias
 
 - [Documentación de Cobre API](https://docs.cobre.co)
-- [Guía de Webhooks](./webhooks.md)
+- [Guía Completa de Webhooks](./WEBHOOKS_COMPLETE.md)
 - [Configuración de Seguridad](./security.md) 

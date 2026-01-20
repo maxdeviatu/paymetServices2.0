@@ -72,7 +72,7 @@ async function testEPaycoProvider () {
     }
 
     console.log('\n2. Creando instancia de EPaycoProvider:')
-    
+
     // Mock require para el provider
     const Module = require('module')
     const originalRequire = Module.prototype.require
@@ -186,7 +186,6 @@ async function testEPaycoProvider () {
     console.log('   ✅ Validación de firmas implementada')
 
     return true
-
   } catch (error) {
     console.error('\n❌ Error durante el testing:', error.message)
     console.error(error.stack)

@@ -17,32 +17,32 @@ const captureRawBody = (req, res, next) => {
   const MAX_BODY_SIZE = 10 * 1024 * 1024 // 10MB limit
   let rawBody = Buffer.alloc(0)
   let totalSize = 0
-  
+
   req.on('data', (chunk) => {
     totalSize += chunk.length
-    
+
     if (totalSize > MAX_BODY_SIZE) {
       const error = new Error('Webhook payload too large')
       error.status = 413
       return next(error)
     }
-    
+
     rawBody = Buffer.concat([rawBody, chunk])
   })
-  
+
   req.on('end', () => {
     req.rawBody = rawBody
-    
+
     // Parse body based on content type
     const contentType = req.get('Content-Type')
     const provider = req.params.provider
-    
+
     if (provider === 'epayco') {
       // ePayco sends form-urlencoded data, parse it
       try {
         const formData = rawBody.toString('utf8')
         const parsedBody = {}
-        
+
         // Parse form-urlencoded data
         formData.split('&').forEach(pair => {
           const [key, value] = pair.split('=')
@@ -50,7 +50,7 @@ const captureRawBody = (req, res, next) => {
             parsedBody[decodeURIComponent(key)] = decodeURIComponent(value)
           }
         })
-        
+
         req.body = parsedBody
       } catch (error) {
         logger.error('Error parsing ePayco form data', {
@@ -63,10 +63,10 @@ const captureRawBody = (req, res, next) => {
       // Other providers send JSON
       req.body = rawBody // Keep as Buffer for express.raw compatibility
     }
-    
+
     next()
   })
-  
+
   req.on('error', (err) => {
     next(err)
   })
@@ -81,11 +81,11 @@ const webhookMiddleware = (req, res, next) => {
       message: 'Empty webhook body'
     })
   }
-  
+
   // Validate Content-Type - ePayco sends form-urlencoded, others send JSON
   const contentType = req.get('Content-Type')
   const provider = req.params.provider
-  
+
   if (provider === 'epayco') {
     // ePayco sends form-urlencoded data
     if (!contentType || !contentType.includes('application/x-www-form-urlencoded')) {
@@ -104,7 +104,7 @@ const webhookMiddleware = (req, res, next) => {
       })
     }
   }
-  
+
   next()
 }
 

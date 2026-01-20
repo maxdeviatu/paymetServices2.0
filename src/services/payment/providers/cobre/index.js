@@ -327,11 +327,11 @@ class CobreProvider {
   async getMoneyMovementStatus (moneyMovementId, options = {}) {
     try {
       const { nested = false, sensitiveData = false } = options
-      
-      logger.info('🔍 Consultando estado del money movement en Cobre:', { 
+
+      logger.info('🔍 Consultando estado del money movement en Cobre:', {
         moneyMovementId,
         nested,
-        sensitiveData 
+        sensitiveData
       })
 
       // Get access token
@@ -347,7 +347,7 @@ class CobreProvider {
       // Make API call to get money movement status
       const response = await axios.get(url, {
         headers: {
-          'Authorization': `Bearer ${accessToken}`,
+          Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json'
         }
       })

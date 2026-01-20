@@ -10,4 +10,4 @@ router.use(authenticate)
 // License change endpoint - require SUPER_ADMIN role
 router.post('/change', requireRole('SUPER_ADMIN'), ctrl.changeLicense)
 
-module.exports = router 
+module.exports = router

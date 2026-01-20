@@ -154,19 +154,19 @@ class SiigoProvider {
       })
 
       const invoice = response.data
-      
+
       // Log detallado del estado de envío a DIAN y correo
       const dianStatus = invoice.stamp?.status || 'N/A'
       const mailStatus = invoice.mail?.status || 'N/A'
-      
+
       logger.info('✅ Factura creada exitosamente en Siigo:', {
         siigoInvoiceId: invoice.id,
         invoiceNumber: invoice.number,
         transactionId: transaction.id,
-        dianStatus: dianStatus,
+        dianStatus,
         dianSent: this.defaultConfig.stampEnabled,
         dianAccepted: dianStatus === 'Accepted',
-        mailStatus: mailStatus,
+        mailStatus,
         mailSent: this.defaultConfig.mailEnabled,
         mailDelivered: mailStatus === 'sent'
       })
@@ -218,7 +218,7 @@ class SiigoProvider {
           logger.warn('⚠️ Factura no enviada por correo:', {
             transactionId: transaction.id,
             invoiceNumber: invoice.number,
-            mailStatus: mailStatus,
+            mailStatus,
             customerEmail: customer.email
           })
         }

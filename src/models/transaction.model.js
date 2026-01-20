@@ -53,7 +53,7 @@ const Transaction = sequelize.define('Transaction', {
     defaultValue: 'NOT_REQUIRED',
     comment: 'Estado de generación de factura: NOT_REQUIRED (no necesita factura), PENDING (pendiente de facturar), PROCESSING (facturando), COMPLETED (facturada), FAILED (falló facturación)',
     validate: {
-      isValidStatus(value) {
+      isValidStatus (value) {
         if (this.status === 'PAID' && value === 'NOT_REQUIRED') {
           throw new Error('Las transacciones pagadas deben tener un estado de facturación PENDING')
         }

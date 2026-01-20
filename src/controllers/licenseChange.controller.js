@@ -87,10 +87,10 @@ exports.changeLicense = async (req, res) => {
     })
 
     let statusCode = 500
-    let message = error.message
+    const message = error.message
 
     // Map specific errors to appropriate status codes
-    if (error.message.includes('no encontrada') || 
+    if (error.message.includes('no encontrada') ||
         error.message.includes('no coincide') ||
         error.message.includes('no está disponible') ||
         error.message.includes('no soporta licencias')) {
@@ -108,7 +108,7 @@ exports.changeLicense = async (req, res) => {
 
     res.status(statusCode).json({
       success: false,
-      message: message
+      message
     })
   }
-} 
+}

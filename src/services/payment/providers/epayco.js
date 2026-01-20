@@ -32,7 +32,7 @@ class EPaycoProvider {
     ]
 
     const missing = requiredVars.filter(varName => !process.env[varName])
-    
+
     if (missing.length > 0) {
       throw new Error(`Missing ePayco configuration: ${missing.join(', ')}`)
     }
@@ -57,13 +57,13 @@ class EPaycoProvider {
   convertCentsToPesos (amountInCents) {
     // Convert cents to pesos by dividing by 100
     const amountInPesos = Math.round(amountInCents / 100)
-    
+
     logger.logBusiness('epayco:amount.conversion', {
       originalCents: amountInCents,
       convertedPesos: amountInPesos,
       formatted: `$${amountInPesos.toLocaleString('es-CO')} COP`
     })
-    
+
     return amountInPesos
   }
 
@@ -73,7 +73,7 @@ class EPaycoProvider {
   cleanPaymentData ({ order, transaction, product, customer }) {
     // Use customer data if available, otherwise fallback to order.customer or defaults
     const customerData = customer || order.customer || {}
-    
+
     // Debug customer data
     logger.logBusiness('epayco:customer.debug', {
       orderId: order.id,
@@ -84,18 +84,18 @@ class EPaycoProvider {
       orderCustomerKeys: order.customer ? Object.keys(order.customer) : [],
       finalCustomerData: customerData
     })
-    
+
     // Convert amount from cents to pesos for ePayco
     const amountInPesos = this.convertCentsToPesos(order.grandTotal)
-    
+
     // Build customer name
     const fullName = `${customerData.firstName || customerData.first_name || ''} ${customerData.lastName || customerData.last_name || ''}`.trim()
-    
+
     return {
       // Product info
       name: (product?.name || 'Producto Innovate Learning').substring(0, 100),
       description: (product?.description || `Licencia ${product?.name || 'Digital'}`).substring(0, 255),
-      
+
       // Transaction info
       amount: amountInPesos.toString(), // ✅ Now in pesos, not cents
       currency: 'cop', // Always COP for Colombia
@@ -104,7 +104,7 @@ class EPaycoProvider {
       tax_ico: '0',
       country: 'co',
       lang: 'es',
-      
+
       // Billing info - Use real customer data
       name_billing: fullName || 'Cliente',
       email_billing: customerData.email || 'cliente@innovatelearning.com.co',
@@ -112,15 +112,15 @@ class EPaycoProvider {
       number_doc_billing: customerData.documentNumber || customerData.document_number || '',
       mobilephone_billing: customerData.phone?.replace(/\D/g, '').replace(/^\+57/, '') || '', // Remove +57 prefix
       address_billing: 'Colombia', // Default address
-      
+
       // Control flags
       external: 'true', // Use external checkout
       test: this.test,
-      
+
       // URLs
       response: this.responseUrl,
       confirmation: this.confirmationUrl,
-      
+
       // Disable unwanted payment methods (keep only credit cards and PSE)
       methodsDisable: ['PSE', 'SP', 'CASH', 'DP', 'ATH']
     }
@@ -131,13 +131,13 @@ class EPaycoProvider {
    */
   mapDocumentType (documentType) {
     const typeMap = {
-      'CC': 'cc', // Cédula de ciudadanía
-      'CE': 'ce', // Cédula de extranjería
-      'NIT': 'nit', // NIT
-      'PASSPORT': 'passport',
-      'TI': 'ti' // Tarjeta de identidad
+      CC: 'cc', // Cédula de ciudadanía
+      CE: 'ce', // Cédula de extranjería
+      NIT: 'nit', // NIT
+      PASSPORT: 'passport',
+      TI: 'ti' // Tarjeta de identidad
     }
-    
+
     return typeMap[documentType] || 'cc'
   }
 
@@ -292,16 +292,16 @@ class EPaycoProvider {
    */
   mapTransactionStatus (epaycoState) {
     const statusMap = {
-      '1': 'PAID',      // Aceptada
-      '2': 'FAILED',    // Rechazada
-      '3': 'PENDING',   // Pendiente
-      '4': 'FAILED',    // Fallida
-      '6': 'PENDING',   // Reversada
-      '7': 'PENDING',   // Retenida
-      '8': 'FAILED',    // Iniciada
-      '9': 'FAILED',    // Fallida por validación
-      '10': 'FAILED',   // Fallida por datos
-      '11': 'FAILED'    // Fallida por fechas
+      1: 'PAID', // Aceptada
+      2: 'FAILED', // Rechazada
+      3: 'PENDING', // Pendiente
+      4: 'FAILED', // Fallida
+      6: 'PENDING', // Reversada
+      7: 'PENDING', // Retenida
+      8: 'FAILED', // Iniciada
+      9: 'FAILED', // Fallida por validación
+      10: 'FAILED', // Fallida por datos
+      11: 'FAILED' // Fallida por fechas
     }
 
     return statusMap[epaycoState] || 'FAILED'
@@ -312,13 +312,13 @@ class EPaycoProvider {
    */
   mapPaymentMethod (franchise) {
     const methodMap = {
-      'visa': 'Visa',
-      'mastercard': 'Mastercard',
-      'amex': 'American Express',
-      'diners': 'Diners Club',
-      'pse': 'PSE',
-      'efecty': 'Efecty',
-      'baloto': 'Baloto'
+      visa: 'Visa',
+      mastercard: 'Mastercard',
+      amex: 'American Express',
+      diners: 'Diners Club',
+      pse: 'PSE',
+      efecty: 'Efecty',
+      baloto: 'Baloto'
     }
 
     return methodMap[franchise?.toLowerCase()] || franchise || 'unknown'

@@ -1,5 +1,9 @@
 # ePayco Integration Guide
 
+> **⚠️ NOTA IMPORTANTE**: Este documento describe la integración con ePayco. Para información técnica detallada sobre webhooks y transacciones validada contra el código fuente, consulte:
+> - **[WEBHOOKS_COMPLETE.md](./WEBHOOKS_COMPLETE.md)** - Sistema de webhooks (fuente de verdad) - Incluye detalles específicos de ePayco
+> - **[TRANSACTIONS_COMPLETE.md](./TRANSACTIONS_COMPLETE.md)** - Sistema de transacciones (fuente de verdad)
+
 ## Descripción General
 
 Este documento describe la implementación e integración del proveedor de pagos ePayco en el sistema de Innovate Learning.

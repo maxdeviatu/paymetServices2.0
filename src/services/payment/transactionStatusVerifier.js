@@ -473,11 +473,13 @@ class TransactionStatusVerifier {
       logger.logBusiness('transaction:statusVerification.emailVerification.resending', {
         orderId,
         customerEmail: order.customer.email,
-        previousAttempt: emailInfo ? {
-          sent: emailInfo.sent,
-          attemptedAt: emailInfo.attemptedAt,
-          error: emailInfo.error
-        } : 'No previous attempt'
+        previousAttempt: emailInfo
+          ? {
+              sent: emailInfo.sent,
+              attemptedAt: emailInfo.attemptedAt,
+              error: emailInfo.error
+            }
+          : 'No previous attempt'
       })
 
       const emailService = require('../email')
@@ -528,8 +530,8 @@ class TransactionStatusVerifier {
 
       return {
         success: true,
-        message: orderUpdates.status === 'COMPLETED' 
-          ? 'Email reenviado exitosamente y orden completada' 
+        message: orderUpdates.status === 'COMPLETED'
+          ? 'Email reenviado exitosamente y orden completada'
           : 'Email reenviado exitosamente',
         orderId: order.id,
         emailSent: true,

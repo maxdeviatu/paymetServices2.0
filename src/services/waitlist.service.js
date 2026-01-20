@@ -330,11 +330,11 @@ class WaitlistService {
       })
     } catch (error) {
       // Revertir a READY_FOR_EMAIL para reintentar
-      await entry.update({ 
+      await entry.update({
         status: 'READY_FOR_EMAIL',
         errorMessage: error.message
       })
-      
+
       logger.logError(error, {
         operation: 'processSingleEmailEntry',
         waitlistEntryId: entry.id,

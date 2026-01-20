@@ -518,7 +518,7 @@ async function reviveOrder (orderId, reason = 'MANUAL', adminId = null) {
     }
 
     // 3. Comprobar la transacción (buscar una transacción válida)
-    const validTransaction = order.transactions.find(tx => 
+    const validTransaction = order.transactions.find(tx =>
       ['CREATED', 'PENDING', 'PAID', 'FAILED'].includes(tx.status)
     )
 
@@ -568,8 +568,8 @@ async function reviveOrder (orderId, reason = 'MANUAL', adminId = null) {
           ...order.meta,
           revived: {
             revivedAt: new Date().toISOString(),
-            reason: reason,
-            adminId: adminId,
+            reason,
+            adminId,
             emailSent: false,
             licenseAssigned: !!licenseResult
           }
@@ -584,8 +584,8 @@ async function reviveOrder (orderId, reason = 'MANUAL', adminId = null) {
           ...validTransaction.meta,
           revived: {
             revivedAt: new Date().toISOString(),
-            reason: reason,
-            adminId: adminId
+            reason,
+            adminId
           }
         }
       }, { transaction: t })
@@ -598,8 +598,8 @@ async function reviveOrder (orderId, reason = 'MANUAL', adminId = null) {
         licenseAssigned: !!licenseResult,
         emailSent: false,
         revivedAt: new Date().toISOString(),
-        reason: reason,
-        adminId: adminId,
+        reason,
+        adminId,
         customer: order.customer,
         product: order.product,
         license: licenseResult
@@ -616,7 +616,7 @@ async function reviveOrder (orderId, reason = 'MANUAL', adminId = null) {
           customer: result.customer,
           product: result.product,
           license: result.license,
-          order: { 
+          order: {
             id: result.orderId,
             createdAt: new Date() // Usar fecha actual para ordenes revividas
           }
@@ -646,7 +646,7 @@ async function reviveOrder (orderId, reason = 'MANUAL', adminId = null) {
           revivedAt: result.revivedAt,
           reason: result.reason,
           adminId: result.adminId,
-          emailSent: emailSent,
+          emailSent,
           licenseAssigned: result.licenseAssigned
         }
       }
@@ -694,7 +694,7 @@ async function reviveOrder (orderId, reason = 'MANUAL', adminId = null) {
 
     logger.logBusiness('order:revive.success', {
       orderId: result.orderId,
-      emailSent: emailSent,
+      emailSent,
       licenseAssigned: result.licenseAssigned,
       messageId: emailResult?.messageId,
       recipient: result.customer?.email

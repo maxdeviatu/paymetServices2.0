@@ -240,5 +240,5 @@ El endpoint registra todos los eventos importantes:
 
 - Servicio de licencias para asignación
 - Servicio de email para envío de licencias
-- TransactionManager para transacciones de base de datos
+- TransactionManager para transacciones de base de datos (ver [TRANSACTIONS_COMPLETE.md](./TRANSACTIONS_COMPLETE.md))
 - Sistema de logging para auditoría 

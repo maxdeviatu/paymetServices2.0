@@ -31,19 +31,19 @@ class LicenseChangeService {
 
         // 2. Find and validate current license
         const currentLicense = await this.findAndValidateLicense(licenseKey, t)
-        
+
         // 3. Find and validate customer
         const customer = await this.findAndValidateCustomer(customerDocumentNumber, currentLicense, t)
-        
+
         // 4. Find and validate new product
         const newProduct = await this.findAndValidateNewProduct(newProductRef, currentLicense, t)
-        
+
         // 5. Find and validate order
         const order = await this.findAndValidateOrder(currentLicense.orderId, t)
-        
+
         // 6. Find available license for new product
         const newLicense = await this.findAvailableLicenseForNewProduct(newProductRef, t)
-        
+
         // 7. Execute the change
         const changeResult = await this.executeLicenseChange(
           currentLicense,
@@ -54,7 +54,7 @@ class LicenseChangeService {
           adminId,
           t
         )
-        
+
         // 8. Send change notification email (async, don't block transaction)
         setImmediate(() => {
           this.sendChangeNotificationEmailAsync(changeResult).catch(error => {
@@ -73,7 +73,7 @@ class LicenseChangeService {
           orderId: order.id,
           customerId: customer.id,
           oldProductRef: currentLicense.productRef,
-          newProductRef: newProductRef,
+          newProductRef,
           adminId
         })
 
@@ -289,11 +289,13 @@ class LicenseChangeService {
     const updatedShippingInfo = {
       ...currentShippingInfo,
       // Preserve previous email if exists
-      previousEmail: currentShippingInfo.email ? {
-        ...currentShippingInfo.email,
-        invalidatedAt: new Date().toISOString(),
-        reason: 'license_change'
-      } : undefined,
+      previousEmail: currentShippingInfo.email
+        ? {
+            ...currentShippingInfo.email,
+            invalidatedAt: new Date().toISOString(),
+            reason: 'license_change'
+          }
+        : undefined,
       // Reset current email status
       email: undefined,
       licenseChange: {
@@ -303,7 +305,7 @@ class LicenseChangeService {
         newLicenseKey: newLicense.licenseKey,
         newProductRef: newProduct.productRef,
         customerDocumentNumber: customer.document_number,
-        adminId: adminId,
+        adminId,
         emailPending: true
       }
     }
@@ -342,7 +344,7 @@ class LicenseChangeService {
         changedAt: new Date(),
         oldProductName: order.product.name,
         newProductName: newProduct.name,
-        adminId: adminId
+        adminId
       }
     }
   }
@@ -365,7 +367,7 @@ class LicenseChangeService {
       await TransactionManager.executeInventoryTransaction(async (t) => {
         const order = await Order.findByPk(changeResult.order.id, { transaction: t })
         const currentShippingInfo = order.shippingInfo || {}
-        
+
         const updatedShippingInfo = {
           ...currentShippingInfo,
           licenseChange: {
@@ -394,7 +396,7 @@ class LicenseChangeService {
       await TransactionManager.executeInventoryTransaction(async (t) => {
         const order = await Order.findByPk(changeResult.order.id, { transaction: t })
         const currentShippingInfo = order.shippingInfo || {}
-        
+
         const updatedShippingInfo = {
           ...currentShippingInfo,
           licenseChange: {
@@ -439,7 +441,7 @@ class LicenseChangeService {
       // Update order shipping info with email details
       const order = await Order.findByPk(changeResult.order.id, { transaction })
       const currentShippingInfo = order.shippingInfo || {}
-      
+
       const updatedShippingInfo = {
         ...currentShippingInfo,
         licenseChange: {
@@ -469,7 +471,7 @@ class LicenseChangeService {
         customerEmail: changeResult.customer.email,
         severity: 'WARNING'
       })
-      
+
       // Don't fail the entire operation for email errors
       // Just log and continue
       return { success: false, error: error.message }
@@ -477,4 +479,4 @@ class LicenseChangeService {
   }
 }
 
-module.exports = new LicenseChangeService() 
+module.exports = new LicenseChangeService()

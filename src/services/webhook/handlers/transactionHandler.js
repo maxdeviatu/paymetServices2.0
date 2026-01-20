@@ -545,7 +545,7 @@ class TransactionHandler {
         // Enviar email de licencia ANTES de completar la orden
         try {
           await this.sendLicenseEmail(order, transaction, licenseResult?.license, dbTransaction)
-          
+
           // Solo completar la orden si el email se envió exitosamente
           await order.update({
             status: 'COMPLETED'
@@ -642,16 +642,16 @@ class TransactionHandler {
             transactionId: transaction.id,
             licenseId: licenseResult.license.id
           })
-          
+
           try {
             const emailResult = await this.sendLicenseEmail(order, transaction, licenseResult.license, dbTransaction)
-            
+
             logger.info('TransactionHandler: sendLicenseEmail completed (optimized)', {
               orderId: order.id,
               transactionId: transaction.id,
-              emailResult: emailResult
+              emailResult
             })
-            
+
             // Solo completar la orden si el email se envió exitosamente
             await order.update({
               status: 'COMPLETED'
@@ -912,7 +912,7 @@ class TransactionHandler {
       hasProvidedLicense: !!providedLicense,
       providedLicenseId: providedLicense?.id
     })
-    
+
     const emailService = require('../../email')
     let license = providedLicense
 
@@ -950,7 +950,7 @@ class TransactionHandler {
 
         logger.info('TransactionHandler: emailService.sendLicenseEmail returned', {
           orderId: order.id,
-          emailResult: emailResult,
+          emailResult,
           resultType: typeof emailResult,
           success: emailResult?.success,
           messageId: emailResult?.messageId
@@ -984,7 +984,7 @@ class TransactionHandler {
         } else {
           logger.warn('TransactionHandler: Email result indicates failure or no success flag', {
             orderId: order.id,
-            emailResult: emailResult,
+            emailResult,
             success: emailResult?.success
           })
         }
@@ -1024,7 +1024,7 @@ class TransactionHandler {
         productRef: order.productRef,
         message: 'Cannot send license email without license'
       })
-      
+
       return {
         success: false,
         error: 'No license found for order',

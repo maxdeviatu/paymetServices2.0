@@ -384,14 +384,14 @@ class InvoiceService {
 
   /**
    * Corrige el estado de transacciones PAID que tienen estados de facturación incorrectos
-   * 
+   *
    * Corrige transacciones con:
    * - invoiceStatus: 'FAILED' → 'COMPLETED' (si tienen factura) o 'PENDING' (si no tienen)
    * - invoiceStatus: 'NOT_REQUIRED' → 'PENDING' (las transacciones PAID no pueden ser NOT_REQUIRED)
-   * 
+   *
    * IMPORTANTE: Excluye automáticamente las transacciones de test que empiecen con "TEST" en gatewayRef
    * Estas transacciones deben mantener su estado de facturación como NOT_REQUIRED
-   * 
+   *
    * @returns {Promise<Object>} Resultado de la corrección
    */
   async fixFailedInvoiceStatus () {
@@ -428,7 +428,7 @@ class InvoiceService {
           }
         }
       })
-      
+
       const testTransactionsExcluded = totalIncorrectTransactions - failedTransactions.length
       if (testTransactionsExcluded > 0) {
         logger.info(`🚫 Excluidas ${testTransactionsExcluded} transacciones de test (empiezan con "TEST")`)
@@ -437,7 +437,7 @@ class InvoiceService {
       logger.info(`🔍 Encontradas ${failedTransactions.length} transacciones con estados de facturación incorrectos (excluyendo transacciones de test)`)
 
       let corrected = 0
-      let errors = []
+      const errors = []
 
       for (const transaction of failedTransactions) {
         try {
@@ -455,11 +455,11 @@ class InvoiceService {
             // La transacción no tiene factura, verificar si se puede generar
             const oldStatus = transaction.invoiceStatus
             logger.info(`⚠️ Transacción ${transaction.id} no tiene factura, marcando como PENDING para reprocesamiento`)
-            
+
             await transaction.update({
               invoiceStatus: 'PENDING'
             })
-            
+
             logger.info(`✅ Transacción ${transaction.id} corregida: ${oldStatus} → PENDING`)
             corrected++
           }
@@ -485,7 +485,6 @@ class InvoiceService {
 
       logger.info('✅ Corrección de estados completada:', result)
       return result
-
     } catch (error) {
       logger.error('❌ Error en corrección de estados de facturación:', error.message)
       throw error

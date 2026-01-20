@@ -53,7 +53,7 @@ exports.createOrder = async (req, res) => {
       try {
         paymentIntent = await paymentService.createPaymentIntent(result.order.id, {
           provider,
-          customer: customer // ✅ Pass customer data to PaymentService
+          customer // ✅ Pass customer data to PaymentService
         })
 
         logger.logBusiness('order:checkout.created', {
@@ -63,7 +63,7 @@ exports.createOrder = async (req, res) => {
           gatewayRef: paymentIntent.gatewayRef,
           provider
         })
-        
+
         // Debug: Log what PaymentService returned
         logger.logBusiness('order:paymentIntent.received', {
           orderId: result.order.id,
@@ -126,7 +126,7 @@ exports.createOrder = async (req, res) => {
         test: paymentIntent.meta.test,
         checkoutData: paymentIntent.meta.epaycoData
       }
-      
+
       logger.logBusiness('order:epayco.response.prepared', {
         orderId: result.order.id,
         hasEpaycoData: !!responseData.epayco,
@@ -568,10 +568,13 @@ exports.reviveOrder = async (req, res) => {
 
     const statusCode = error.message === 'Order not found'
       ? 404
-      : error.message.includes('Cannot revive') ? 409 
-      : error.message.includes('No valid transaction') ? 400
-      : error.message.includes('No available licenses') ? 409
-      : 500
+      : error.message.includes('Cannot revive')
+        ? 409
+        : error.message.includes('No valid transaction')
+          ? 400
+          : error.message.includes('No available licenses')
+            ? 409
+            : 500
 
     res.status(statusCode).json({
       success: false,

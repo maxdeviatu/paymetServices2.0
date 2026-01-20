@@ -19,7 +19,7 @@ class InvoiceProcessingJob {
   /**
    * Verifica si el job debe ejecutarse
    */
-  shouldRun() {
+  shouldRun () {
     if (!this.isEnabled) {
       logger.info('Job de facturación deshabilitado por configuración')
       return false

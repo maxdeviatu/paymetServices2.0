@@ -268,7 +268,7 @@ exports.verifyAndResendLicenseEmail = async (req, res) => {
 
     if (error.message.includes('no encontrada')) {
       statusCode = 404
-    } else if (error.message.includes('no está en estado válido') || 
+    } else if (error.message.includes('no está en estado válido') ||
                error.message.includes('no tiene transacciones pagadas')) {
       statusCode = 400
     } else if (error.message.includes('no tiene licencia')) {

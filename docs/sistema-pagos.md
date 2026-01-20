@@ -1,5 +1,11 @@
 # Sistema de Pagos y Licencias
 
+> **⚠️ NOTA IMPORTANTE**: Este documento proporciona una **visión general** del sistema de pagos. Para información técnica detallada y validada, consulte los documentos consolidados:
+> - **[WEBHOOKS_COMPLETE.md](./WEBHOOKS_COMPLETE.md)** - Sistema de webhooks (fuente de verdad)
+> - **[TRANSACTIONS_COMPLETE.md](./TRANSACTIONS_COMPLETE.md)** - Sistema de transacciones (fuente de verdad)
+> 
+> Este documento puede contener información general o desactualizada. Para implementación y detalles técnicos exactos, siempre consulte los documentos consolidados validados contra el código fuente.
+
 ## Descripción General
 
 Este documento describe la implementación completa del sistema de pagos y gestión de licencias digitales de Innovate Learning. El sistema permite el procesamiento de órdenes, pagos y la entrega automática de licencias digitales a los clientes.

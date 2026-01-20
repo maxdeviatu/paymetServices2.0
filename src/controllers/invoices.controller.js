@@ -83,10 +83,10 @@ class InvoicesController {
   async getInvoiceById (req, res) {
     try {
       const { id } = req.params
-      
+
       // Log del ID recibido para debugging
       logger.info(`🔍 Obteniendo factura por ID. ID recibido: "${id}" (tipo: ${typeof id})`)
-      
+
       // Validación más robusta del ID
       if (!id || id === 'undefined' || id === 'null') {
         logger.warn(`❌ ID de factura no proporcionado: "${id}"`)
@@ -97,7 +97,7 @@ class InvoicesController {
       }
 
       const invoiceId = parseInt(id, 10)
-      
+
       if (isNaN(invoiceId) || invoiceId < 1) {
         logger.warn(`❌ ID de factura inválido: "${id}" -> parseado como: ${invoiceId}`)
         return res.status(400).json({
@@ -201,10 +201,10 @@ class InvoicesController {
   async updateInvoiceStatus (req, res) {
     try {
       const { id } = req.params
-      
+
       // Log del ID recibido para debugging
       logger.info(`🔍 Actualizando estado de factura. ID recibido: "${id}" (tipo: ${typeof id})`)
-      
+
       // Validación más robusta del ID
       if (!id || id === 'undefined' || id === 'null') {
         logger.warn(`❌ ID de factura no proporcionado: "${id}"`)
@@ -215,7 +215,7 @@ class InvoicesController {
       }
 
       const invoiceId = parseInt(id, 10)
-      
+
       if (isNaN(invoiceId) || invoiceId < 1) {
         logger.warn(`❌ ID de factura inválido: "${id}" -> parseado como: ${invoiceId}`)
         return res.status(400).json({

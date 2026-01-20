@@ -133,7 +133,7 @@ class WaitlistProcessingJob {
   async processAllReadyForEmail () {
     try {
       const { WaitlistEntry } = require('../models')
-      
+
       // Obtener TODAS las entradas READY_FOR_EMAIL
       const readyEntries = await WaitlistEntry.findAll({
         where: {

@@ -156,9 +156,9 @@ class EmailRetryJob {
 
         // Try to send the license email with database transaction
         const emailResult = await transactionHandler.sendLicenseEmail(
-          order, 
-          { id: 'retry' }, 
-          license, 
+          order,
+          { id: 'retry' },
+          license,
           dbTransaction
         )
 
@@ -239,4 +239,4 @@ class EmailRetryJob {
   }
 }
 
-module.exports = EmailRetryJob 
+module.exports = EmailRetryJob

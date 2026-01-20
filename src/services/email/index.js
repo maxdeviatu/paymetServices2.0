@@ -52,7 +52,7 @@ class EmailService {
 
       logger.info('EmailService: sendEmail returned from brevoService', {
         orderId: order.id,
-        result: result,
+        result,
         resultType: typeof result,
         success: result?.success,
         messageId: result?.messageId
@@ -150,7 +150,7 @@ class EmailService {
           email: customer.email,
           name: customer.name
         },
-        subject: `Cambio de Producto - Tu nueva licencia está lista`,
+        subject: 'Cambio de Producto - Tu nueva licencia está lista',
         templateName: 'license-change',
         variables: {
           customerName: customer.name,

@@ -30,7 +30,7 @@ class EPaycoAdapter {
   normalize (req) {
     try {
       const body = req.body
-      
+
       logger.info('EPaycoAdapter: Normalizing webhook', {
         invoice: body.x_id_factura,
         transactionId: body.x_transaction_id,
@@ -75,16 +75,16 @@ class EPaycoAdapter {
    */
   mapStatus (epaycoState) {
     const statusMap = {
-      '1': 'PAID',      // Aceptada
-      '2': 'FAILED',    // Rechazada
-      '3': 'PENDING',   // Pendiente
-      '4': 'FAILED',    // Fallida
-      '6': 'PENDING',   // Reversada
-      '7': 'PENDING',   // Retenida
-      '8': 'FAILED',    // Iniciada
-      '9': 'FAILED',    // Fallida por validación
-      '10': 'FAILED',   // Fallida por datos
-      '11': 'FAILED'    // Fallida por fechas
+      1: 'PAID', // Aceptada
+      2: 'FAILED', // Rechazada
+      3: 'PENDING', // Pendiente
+      4: 'FAILED', // Fallida
+      6: 'PENDING', // Reversada
+      7: 'PENDING', // Retenida
+      8: 'FAILED', // Iniciada
+      9: 'FAILED', // Fallida por validación
+      10: 'FAILED', // Fallida por datos
+      11: 'FAILED' // Fallida por fechas
     }
 
     return statusMap[epaycoState] || 'FAILED'
@@ -117,7 +117,7 @@ class EPaycoAdapter {
   verifySignature (req) {
     try {
       const body = req.body
-      
+
       // Verificar que tenga los campos requeridos
       if (!body.x_id_factura || !body.x_transaction_id || !body.x_amount || !body.x_signature) {
         logger.warn('EPaycoAdapter: Missing required fields', {
@@ -165,4 +165,4 @@ class EPaycoAdapter {
   }
 }
 
-module.exports = EPaycoAdapter 
+module.exports = EPaycoAdapter

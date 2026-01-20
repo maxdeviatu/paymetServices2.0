@@ -129,10 +129,10 @@ class CobreAdapter {
   parseWebhook (req) {
     try {
       const { body, rawBodyString } = this._parseRequestBody(req)
-      
+
       // Detectar si el webhook contiene múltiples eventos
       const events = this._extractEvents(body)
-      
+
       logger.info('Cobre webhook: Processing events', {
         totalEvents: events.length,
         eventKeys: events.map(e => e.event_key)
@@ -428,7 +428,7 @@ class CobreAdapter {
       rawHeaders: headers,
       rawBody: rawBodyString,
       payload: body,
-      eventIndex: eventIndex // Add eventIndex to the event object
+      eventIndex // Add eventIndex to the event object
     }
   }
 

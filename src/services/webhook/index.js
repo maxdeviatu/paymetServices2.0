@@ -73,7 +73,7 @@ class WebhookService {
 
       for (let i = 0; i < webhookEvents.length; i++) {
         const webhookEvent = webhookEvents[i]
-        
+
         try {
           logger.info('WebhookService: Processing event', {
             eventIndex: i,
@@ -207,7 +207,6 @@ class WebhookService {
             status: webhookEvent.status,
             result: result.success
           })
-
         } catch (error) {
           logger.error('WebhookService: Error processing event', {
             eventIndex: i,
@@ -259,7 +258,7 @@ class WebhookService {
       }
     } catch (error) {
       const processingTime = Date.now() - startTime
-      
+
       logger.error('WebhookService: Error processing webhook', {
         provider: providerName,
         error: error.message,
@@ -297,7 +296,7 @@ class WebhookService {
     // Buscar SOLO por provider y externalRef (no por eventId)
     // ePayco puede enviar múltiples webhooks con diferentes eventId para la misma transacción
     // La idempotencia debe basarse en la referencia externa, no en el ID del evento
-    
+
     const existingEvent = await WebhookEvent.findOne({
       where: {
         provider: webhookEvent.provider,
@@ -331,7 +330,7 @@ class WebhookService {
    * Registra un evento de webhook en la base de datos
    * @param {Object} webhookEvent - Evento del webhook
    * @returns {Promise<WebhookEvent>} - Evento registrado
-   * 
+   *
    * Nota: La idempotencia se verifica ANTES de llamar a este método
    * en checkIdempotency(), por lo que este método asume que el evento
    * no existe previamente.
