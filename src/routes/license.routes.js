@@ -29,6 +29,9 @@ router.use(authenticate)
 router.get('/template', requireRole('EDITOR'), ctrl.templateCsv)
 router.post('/upload', requireRole('EDITOR'), upload.single('file'), ctrl.bulkUpload)
 
+// Bulk dismount - require SUPER_ADMIN role
+router.post('/dismount', requireRole('SUPER_ADMIN'), upload.single('file'), ctrl.bulkDismount)
+
 // CRUD operations
 router.get('/', requireRole('READ_ONLY'), ctrl.getAll)
 router.get('/:id', requireRole('READ_ONLY'), ctrl.getById)

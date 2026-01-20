@@ -213,7 +213,7 @@ exports.return = async (req, res) => {
     })
 
     let statusCode = 400
-    let message = error.message
+    const message = error.message
 
     if (error.message.includes('not found')) {
       statusCode = 404
@@ -225,7 +225,7 @@ exports.return = async (req, res) => {
 
     res.status(statusCode).json({
       success: false,
-      message: message
+      message
     })
   }
 }
@@ -309,6 +309,71 @@ exports.bulkUpload = async (req, res) => {
   } catch (error) {
     logger.logError(error, {
       operation: 'bulkUploadLicenses',
+      filename: req.file?.originalname
+    })
+    res.status(400).json({
+      success: false,
+      message: error.message
+    })
+  }
+}
+
+/**
+ * Bulk dismount licenses from CSV
+ * Only AVAILABLE licenses can be dismounted
+ * Requires SUPER_ADMIN role
+ */
+exports.bulkDismount = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'CSV file is required'
+      })
+    }
+
+    // Parse CSV using csv-parse/sync
+    const csv = require('csv-parse/sync')
+    const csvContent = req.file.buffer.toString('utf8')
+
+    const rows = csv.parse(csvContent, {
+      columns: true,
+      trim: true,
+      skip_empty_lines: true
+    })
+
+    if (rows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'CSV file is empty or invalid'
+      })
+    }
+
+    // Validate required columns
+    const requiredColumns = ['productRef', 'licenseKey']
+    const firstRow = rows[0]
+    const missingColumns = requiredColumns.filter(col => !(col in firstRow))
+
+    if (missingColumns.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Missing required columns: ${missingColumns.join(', ')}`
+      })
+    }
+
+    const result = await service.bulkDismount(rows, req.admin?.id)
+
+    res.status(200).json({
+      success: true,
+      message: `Successfully dismounted ${result.count} licenses`,
+      data: {
+        dismounted: result.count,
+        total: rows.length
+      }
+    })
+  } catch (error) {
+    logger.logError(error, {
+      operation: 'bulkDismountLicenses',
       filename: req.file?.originalname
     })
     res.status(400).json({

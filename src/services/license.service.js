@@ -1,5 +1,4 @@
 const { License, Product } = require('../models')
-const { sequelize } = require('../models')
 const logger = require('../config/logger')
 const TransactionManager = require('../utils/transactionManager')
 
@@ -183,7 +182,7 @@ async function returnToStock (code, reason = 'MANUAL', adminId = null) {
       // 4. Marcar licencia original como devuelta PRIMERO
       const last5 = code.slice(-5)
       const updatedLicense = await license.update({
-        licenseKey: `DEVUELTA-${last5}`,
+        licenseKey: `DEVUELTA-${last5}`
         // Mantener status, orderId, soldAt para historial
       }, { transaction: dbTransaction })
 
@@ -203,10 +202,10 @@ async function returnToStock (code, reason = 'MANUAL', adminId = null) {
           ...transaction.meta,
           refunded: {
             refundedAt: new Date().toISOString(),
-            reason: reason,
-            adminId: adminId,
+            reason,
+            adminId,
             originalLicenseKey: code,
-            newLicenseKey: newLicenseKey
+            newLicenseKey
           }
         }
       }, { transaction: dbTransaction })
@@ -217,15 +216,15 @@ async function returnToStock (code, reason = 'MANUAL', adminId = null) {
         newAvailableLicenseKey: newLicense.licenseKey,
         orderId: license.orderId,
         transactionId: transaction.id,
-        reason: reason,
-        adminId: adminId
+        reason,
+        adminId
       })
 
       return {
         returnedLicense: updatedLicense,
         newAvailableLicense: newLicense,
-        transaction: transaction,
-        order: order
+        transaction,
+        order
       }
     })
   } catch (error) {
@@ -250,9 +249,9 @@ async function bulkImport (rows) {
 
     // Filter out empty or invalid rows
     const validRows = rows.filter(row => {
-      return row.productRef && 
-             row.productRef.trim() !== '' && 
-             row.licenseKey && 
+      return row.productRef &&
+             row.productRef.trim() !== '' &&
+             row.licenseKey &&
              row.licenseKey.trim() !== ''
     })
 
@@ -369,12 +368,109 @@ async function getById (id) {
   }
 }
 
+/**
+ * Bulk dismount licenses from CSV data
+ * Only AVAILABLE licenses can be dismounted
+ * Operation is atomic: if any license fails, all are rolled back
+ */
+async function bulkDismount (rows, adminId) {
+  try {
+    logger.logBusiness('bulkDismountLicenses', {
+      totalRows: rows.length,
+      adminId
+    })
+
+    // 1. Filter valid rows (non-empty productRef and licenseKey)
+    const validRows = rows.filter(row =>
+      row.productRef &&
+      row.productRef.trim() !== '' &&
+      row.licenseKey &&
+      row.licenseKey.trim() !== ''
+    )
+
+    if (validRows.length === 0) {
+      throw new Error('No valid rows found in CSV. All rows must have productRef and licenseKey.')
+    }
+
+    if (validRows.length !== rows.length) {
+      const emptyRows = rows.length - validRows.length
+      throw new Error(`${emptyRows} rows have empty productRef or licenseKey`)
+    }
+
+    // 2. Extract unique license keys
+    const licenseKeys = validRows.map(row => row.licenseKey.trim())
+    const uniqueKeys = [...new Set(licenseKeys)]
+
+    // 3. Execute in atomic transaction with inventory isolation
+    return await TransactionManager.executeInventoryTransaction(async (t) => {
+      // 4. Find all licenses with exclusive lock
+      const licenses = await License.findAll({
+        where: { licenseKey: uniqueKeys },
+        lock: t.LOCK.UPDATE,
+        transaction: t
+      })
+
+      // 5. Validate all licenses exist
+      const foundKeys = licenses.map(l => l.licenseKey)
+      const notFoundKeys = uniqueKeys.filter(key => !foundKeys.includes(key))
+
+      if (notFoundKeys.length > 0) {
+        throw new Error(`Licenses not found: ${notFoundKeys.join(', ')}`)
+      }
+
+      // 6. Validate productRef matches for each license
+      for (const row of validRows) {
+        const license = licenses.find(l => l.licenseKey === row.licenseKey.trim())
+        if (license.productRef !== row.productRef.trim()) {
+          throw new Error(
+            `License ${row.licenseKey} belongs to product ${license.productRef}, not ${row.productRef}`
+          )
+        }
+      }
+
+      // 7. Validate all licenses are in AVAILABLE status
+      const invalidLicenses = licenses.filter(l => l.status !== 'AVAILABLE')
+
+      if (invalidLicenses.length > 0) {
+        const details = invalidLicenses.map(l => `${l.licenseKey} (${l.status})`).join(', ')
+        throw new Error(`Cannot dismount licenses with invalid status: ${details}`)
+      }
+
+      // 8. Update all licenses to ANNULLED status
+      for (const license of licenses) {
+        const last5 = license.licenseKey.slice(-5)
+        await license.update({
+          licenseKey: `ANULADA-${last5}`,
+          status: 'ANNULLED',
+          orderId: null,
+          reservedAt: null
+        }, { transaction: t })
+      }
+
+      logger.logBusiness('bulkDismountLicenses.success', {
+        dismounted: licenses.length,
+        adminId
+      })
+
+      return { count: licenses.length }
+    })
+  } catch (error) {
+    logger.logError(error, {
+      operation: 'bulkDismountLicenses',
+      rowCount: rows.length,
+      adminId
+    })
+    throw error
+  }
+}
+
 module.exports = {
   create,
   update,
   annul,
   returnToStock,
   bulkImport,
+  bulkDismount,
   getAll,
   getById
 }
