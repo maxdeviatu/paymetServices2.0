@@ -19,10 +19,15 @@ class SiigoInitializer {
 
   /**
    * Inicializa la conexión con Siigo y verifica credenciales
+   * @param {Object} options - Opciones de inicialización
+   * @param {boolean} options.silent - Si es true, no emite logs (modo startup estructurado)
    */
-  async initialize () {
+  async initialize (options = {}) {
+    const { silent = false } = options
     try {
-      logger.info('🔌 Inicializando conexión con Siigo...')
+      if (!silent) {
+        logger.info('🔌 Inicializando conexión con Siigo...')
+      }
 
       // Validar que las variables de entorno estén configuradas
       const requiredEnvVars = [
@@ -39,7 +44,7 @@ class SiigoInitializer {
 
       // Intentar autenticación
       this.connectionStatus.lastAttempt = new Date()
-      const token = await this.siigoAuth.authenticate()
+      const token = await this.siigoAuth.authenticate({ silent })
 
       this.connectionStatus.connected = true
       this.connectionStatus.token = token ? '***' + token.slice(-8) : null // Solo mostrar últimos 8 caracteres
@@ -47,9 +52,11 @@ class SiigoInitializer {
       this.connectionStatus.error = null
       this.isInitialized = true
 
-      logger.info('✅ Conexión con Siigo establecida exitosamente')
-      logger.info(`🔑 Token obtenido: ${this.connectionStatus.token}`)
-      logger.info(`⏰ Token expira: ${this.connectionStatus.tokenExpiration?.toLocaleString('es-CO')}`)
+      if (!silent) {
+        logger.info('✅ Conexión con Siigo establecida exitosamente')
+        logger.info(`🔑 Token obtenido: ${this.connectionStatus.token}`)
+        logger.info(`⏰ Token expira: ${this.connectionStatus.tokenExpiration?.toLocaleString('es-CO')}`)
+      }
 
       return {
         success: true,
@@ -61,15 +68,17 @@ class SiigoInitializer {
       this.connectionStatus.token = null
       this.connectionStatus.tokenExpiration = null
 
-      logger.error('❌ Error conectando con Siigo:', {
-        message: error.message,
-        status: error.response?.status,
-        data: error.response?.data
-      })
+      if (!silent) {
+        logger.error('❌ Error conectando con Siigo:', {
+          message: error.message,
+          status: error.response?.status,
+          data: error.response?.data
+        })
 
-      // No lanzar el error para que no detenga el arranque del servidor
-      // Solo registrar el problema
-      logger.warn('⚠️ El servidor continuará sin conexión a Siigo. Las facturas no podrán generarse.')
+        // No lanzar el error para que no detenga el arranque del servidor
+        // Solo registrar el problema
+        logger.warn('⚠️ El servidor continuará sin conexión a Siigo. Las facturas no podrán generarse.')
+      }
 
       return {
         success: false,

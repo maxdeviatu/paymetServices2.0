@@ -18,10 +18,16 @@ class CobreAccountsService {
 
   /**
    * Busca una cuenta existente por su alias
+   * @param {string} alias - Alias de la cuenta a buscar
+   * @param {Object} options - Opciones
+   * @param {boolean} options.silent - Si es true, no emite logs
    */
-  async findAccountByAlias (alias) {
+  async findAccountByAlias (alias, options = {}) {
+    const { silent = false } = options
     try {
-      logger.info('🔍 Buscando cuenta Cobre por alias:', alias)
+      if (!silent) {
+        logger.info('🔍 Buscando cuenta Cobre por alias:', alias)
+      }
 
       const response = await axios.get(`${this.baseURL}/v1/accounts`, {
         headers: {
@@ -36,15 +42,19 @@ class CobreAccountsService {
 
       if (response.data.contents && response.data.contents.length > 0) {
         const account = response.data.contents[0]
-        logger.info('✅ Cuenta Cobre encontrada:', {
-          id: account.id,
-          alias: account.alias,
-          status: account.connectivity?.status
-        })
+        if (!silent) {
+          logger.info('✅ Cuenta Cobre encontrada:', {
+            id: account.id,
+            alias: account.alias,
+            status: account.connectivity?.status
+          })
+        }
         return account
       }
 
-      logger.info('ℹ️ No se encontró cuenta Cobre con el alias:', alias)
+      if (!silent) {
+        logger.info('ℹ️ No se encontró cuenta Cobre con el alias:', alias)
+      }
       return null
     } catch (error) {
       logger.error('❌ Error al buscar cuenta Cobre:', {
@@ -58,10 +68,16 @@ class CobreAccountsService {
 
   /**
    * Crea una nueva cuenta de balance
+   * @param {string} alias - Alias para la cuenta
+   * @param {Object} options - Opciones
+   * @param {boolean} options.silent - Si es true, no emite logs
    */
-  async createBalanceAccount (alias) {
+  async createBalanceAccount (alias, options = {}) {
+    const { silent = false } = options
     try {
-      logger.info('📝 Creando nueva cuenta Cobre con alias:', alias)
+      if (!silent) {
+        logger.info('📝 Creando nueva cuenta Cobre con alias:', alias)
+      }
 
       const response = await axios.post(`${this.baseURL}/v1/accounts`, {
         provider_id: 'pr_col_cobre',
@@ -75,11 +91,13 @@ class CobreAccountsService {
       })
 
       const account = response.data
-      logger.info('✅ Cuenta Cobre creada exitosamente:', {
-        id: account.id,
-        alias: account.alias,
-        status: account.connectivity?.status
-      })
+      if (!silent) {
+        logger.info('✅ Cuenta Cobre creada exitosamente:', {
+          id: account.id,
+          alias: account.alias,
+          status: account.connectivity?.status
+        })
+      }
 
       return account
     } catch (error) {
@@ -94,8 +112,11 @@ class CobreAccountsService {
 
   /**
    * Inicializa o recupera la cuenta de balance
+   * @param {Object} options - Opciones
+   * @param {boolean} options.silent - Si es true, no emite logs
    */
-  async initializeAccount () {
+  async initializeAccount (options = {}) {
+    const { silent = false } = options
     try {
       if (!this.accessToken) {
         throw new Error('No hay token de acceso disponible')
@@ -104,21 +125,23 @@ class CobreAccountsService {
       const alias = 'Colombian Innovate Payment Services'
 
       // Buscar cuenta existente
-      let account = await this.findAccountByAlias(alias)
+      let account = await this.findAccountByAlias(alias, { silent })
 
       // Si no existe, crear nueva cuenta
       if (!account) {
-        account = await this.createBalanceAccount(alias)
+        account = await this.createBalanceAccount(alias, { silent })
       }
 
       // Almacenar cuenta en memoria
       this.account = account
 
-      logger.info('✅ Cuenta Cobre inicializada:', {
-        id: account.id,
-        alias: account.alias,
-        status: account.connectivity?.status
-      })
+      if (!silent) {
+        logger.info('✅ Cuenta Cobre inicializada:', {
+          id: account.id,
+          alias: account.alias,
+          status: account.connectivity?.status
+        })
+      }
 
       return account
     } catch (error) {

@@ -1,6 +1,7 @@
 const { Product, Discount } = require('../models')
 const { Op } = require('sequelize')
 const logger = require('../config/logger')
+const TransactionManager = require('../utils/transactionManager')
 
 /**
  * Servicio para la gestión de productos
@@ -246,6 +247,148 @@ class ProductService {
     const product = await this.getProductById(id, true)
     await product.destroy()
     return true
+  }
+
+  /**
+   * Importar productos masivamente desde CSV
+   * @param {Array} rows - Filas del CSV parseado
+   * @param {number} adminId - ID del admin que realiza la operación
+   * @returns {Promise<Object>} Resultado de la importación
+   */
+  async bulkImport (rows, adminId) {
+    try {
+      logger.logBusiness('bulkImportProducts.start', {
+        rowCount: rows.length,
+        adminId
+      })
+
+      // 1. Filtrar filas válidas (name, productRef y price no vacíos)
+      const validRows = rows.filter(row => {
+        return row.name &&
+               row.name.trim() !== '' &&
+               row.productRef &&
+               row.productRef.trim() !== '' &&
+               row.price &&
+               row.price.toString().trim() !== ''
+      })
+
+      if (validRows.length === 0) {
+        throw new Error('No se encontraron filas válidas. Todas las filas deben tener name, productRef y price.')
+      }
+
+      if (validRows.length !== rows.length) {
+        const emptyRows = rows.length - validRows.length
+        throw new Error(`${emptyRows} fila(s) tienen name, productRef o price vacíos`)
+      }
+
+      // 2. Verificar productRef no duplicados en el CSV
+      const productRefs = validRows.map(row => row.productRef.trim())
+      const uniqueRefs = [...new Set(productRefs)]
+
+      if (uniqueRefs.length !== productRefs.length) {
+        const duplicates = productRefs.filter((ref, index) => productRefs.indexOf(ref) !== index)
+        throw new Error(`Referencias duplicadas en el CSV: ${[...new Set(duplicates)].join(', ')}`)
+      }
+
+      // 3. Verificar que no existan en la BD
+      const existingProducts = await Product.findAll({
+        where: { productRef: uniqueRefs },
+        attributes: ['productRef']
+      })
+
+      if (existingProducts.length > 0) {
+        const existingRefs = existingProducts.map(p => p.productRef)
+        throw new Error(`Las siguientes referencias ya existen en la base de datos: ${existingRefs.join(', ')}`)
+      }
+
+      // 4. Validar y preparar datos
+      const productsToCreate = validRows.map((row, index) => {
+        // Validar price es número
+        const price = parseInt(row.price, 10)
+        if (isNaN(price) || price < 0) {
+          throw new Error(`Fila ${index + 2}: El precio debe ser un número entero mayor o igual a 0`)
+        }
+
+        // Validar currency si está presente
+        const validCurrencies = ['USD', 'EUR', 'COP', 'MXN']
+        const currency = row.currency?.trim()?.toUpperCase() || 'COP'
+        if (!validCurrencies.includes(currency)) {
+          throw new Error(`Fila ${index + 2}: Moneda inválida '${row.currency}'. Use: ${validCurrencies.join(', ')}`)
+        }
+
+        // Parsear license_type
+        let licenseType = false
+        if (row.license_type) {
+          const lt = row.license_type.toString().trim().toLowerCase()
+          licenseType = lt === 'true' || lt === '1' || lt === 'yes' || lt === 'si'
+        }
+
+        // Validar image es URL si está presente
+        if (row.image && row.image.trim() !== '') {
+          try {
+            const validatedUrl = new URL(row.image.trim())
+            if (!['http:', 'https:'].includes(validatedUrl.protocol)) {
+              throw new Error('Protocolo no válido')
+            }
+          } catch {
+            throw new Error(`Fila ${index + 2}: La imagen debe ser una URL válida (http/https)`)
+          }
+        }
+
+        return {
+          name: row.name.trim(),
+          productRef: row.productRef.trim(),
+          price,
+          currency,
+          description: row.description?.trim() || null,
+          features: row.features?.trim() || null,
+          image: row.image?.trim() || null,
+          provider: row.provider?.trim() || null,
+          license_type: licenseType,
+          isActive: true
+        }
+      })
+
+      // 5. Crear productos en transacción atómica
+      // individualHooks: true es necesario para que se ejecute el hook beforeValidate que genera el slug
+      const createdProducts = await TransactionManager.executeBulkTransaction(async (t) => {
+        const products = await Product.bulkCreate(productsToCreate, {
+          transaction: t,
+          returning: true,
+          individualHooks: true
+        })
+
+        logger.logBusiness('bulkImportProducts.created', {
+          count: products.length,
+          adminId
+        })
+
+        return products
+      })
+
+      logger.logBusiness('bulkImportProducts.success', {
+        imported: createdProducts.length,
+        adminId
+      })
+
+      return {
+        imported: createdProducts.length,
+        products: createdProducts.map(p => ({
+          id: p.id,
+          name: p.name,
+          productRef: p.productRef,
+          price: p.price,
+          currency: p.currency
+        }))
+      }
+    } catch (error) {
+      logger.logError(error, {
+        operation: 'bulkImportProducts',
+        rowCount: rows.length,
+        adminId
+      })
+      throw error
+    }
   }
 }
 

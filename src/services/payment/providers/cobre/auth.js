@@ -14,10 +14,15 @@ class CobreAuthService {
 
   /**
    * Autentica con Cobre y obtiene un token de acceso
+   * @param {Object} options - Opciones de autenticación
+   * @param {boolean} options.silent - Si es true, no emite logs (modo startup estructurado)
    */
-  async authenticate () {
+  async authenticate (options = {}) {
+    const { silent = false } = options
     try {
-      logger.info(`   URL: ${this.baseURL}/v1/auth`)
+      if (!silent) {
+        logger.info(`   URL: ${this.baseURL}/v1/auth`)
+      }
 
       const response = await axios.post(`${this.baseURL}/v1/auth`, {
         user_id: this.userId,
@@ -27,19 +32,23 @@ class CobreAuthService {
       this.accessToken = response.data.access_token
       this.tokenExpiration = new Date(Date.now() + (response.data.expiration_time * 1000))
 
-      logger.info('✅ Autenticación exitosa')
-      logger.info('📊 Detalles:')
-      logger.info(`   - Token expira en: ${this.tokenExpiration.toLocaleString()}`)
-      logger.info(`   - Duración: ${response.data.expiration_time} segundos`)
+      if (!silent) {
+        logger.info('✅ Autenticación exitosa')
+        logger.info('📊 Detalles:')
+        logger.info(`   - Token expira en: ${this.tokenExpiration.toLocaleString()}`)
+        logger.info(`   - Duración: ${response.data.expiration_time} segundos`)
+      }
 
       // Establecer el token en el servicio de cuentas
       accountsService.setAccessToken(this.accessToken)
 
       // Inicializar la cuenta después de autenticarse
-      logger.info('\n💳 Inicializando cuenta Cobre...')
-      const account = await accountsService.initializeAccount()
+      if (!silent) {
+        logger.info('\n💳 Inicializando cuenta Cobre...')
+      }
+      const account = await accountsService.initializeAccount({ silent })
 
-      if (account) {
+      if (account && !silent) {
         logger.info('✅ Cuenta Cobre lista para uso')
         logger.info(`   - ID: ${account.id}`)
         logger.info(`   - Alias: ${account.alias}`)

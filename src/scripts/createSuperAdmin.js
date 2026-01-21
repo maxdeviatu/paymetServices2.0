@@ -2,7 +2,14 @@ const { Admin } = require('../models/admin.model')
 const logger = require('../config/logger')
 require('dotenv').config()
 
-async function createSuperAdmin () {
+/**
+ * Crea o verifica el super administrador
+ * @param {Object} options - Opciones de creación
+ * @param {boolean} options.silent - Si es true, no emite logs
+ * @returns {Object} Resultado de la operación
+ */
+async function createSuperAdmin (options = {}) {
+  const { silent = false } = options
   try {
     const superAdminEmail = process.env.SUPER_ADMIN_EMAIL
     const superAdminPassword = process.env.SUPER_ADMIN_PASSWORD
@@ -23,9 +30,15 @@ async function createSuperAdmin () {
         role: 'SUPER_ADMIN',
         isActive: true
       })
-      logger.info('Super administrador creado exitosamente')
+      if (!silent) {
+        logger.info('Super administrador creado exitosamente')
+      }
+      return { created: true, email: superAdminEmail }
     } else {
-      logger.info('Super administrador ya existe')
+      if (!silent) {
+        logger.info('Super administrador ya existe')
+      }
+      return { created: false, exists: true, email: superAdminEmail }
     }
   } catch (error) {
     logger.error('Error al crear el super administrador:', error)

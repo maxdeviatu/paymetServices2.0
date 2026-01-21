@@ -1,10 +1,26 @@
 const express = require('express')
-const { body, param } = require('express-validator')
+const { body } = require('express-validator')
+const multer = require('multer')
 const router = express.Router()
 const productsController = require('../controllers/products.controller')
 const { authenticate } = require('../middlewares/auth')
 const { requireRole } = require('../middlewares/role')
 const { validateRequest } = require('../middlewares/validator')
+
+// Configure multer for memory storage (CSV files)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'text/csv' ||
+        file.mimetype === 'application/vnd.ms-excel' ||
+        file.originalname.toLowerCase().endsWith('.csv')) {
+      cb(null, true)
+    } else {
+      cb(new Error('Solo se permiten archivos CSV'), false)
+    }
+  }
+})
 
 // Validaciones para productos
 const productValidations = [
@@ -35,6 +51,13 @@ router.post('/',
   productValidations,
   validateRequest,
   productsController.createProduct
+)
+
+// Bulk upload productos desde CSV - requiere EDITOR
+router.post('/upload',
+  requireRole('EDITOR'),
+  upload.single('file'),
+  productsController.bulkUpload
 )
 
 router.put('/:id',

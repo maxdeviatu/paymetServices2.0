@@ -48,47 +48,83 @@ class PaymentService {
 
   /**
    * Initialize all payment providers
+   * @param {Object} options - Opciones de inicialización
+   * @param {boolean} options.silent - Si es true, no emite logs (modo startup estructurado)
+   * @returns {Object} Resumen de inicialización
    */
-  async initialize () {
+  async initialize (options = {}) {
+    const { silent = false } = options
+
     if (this.initialized) {
-      return
+      return { alreadyInitialized: true }
     }
 
     try {
-      logger.info('🔍 Validando proveedores de pago...')
+      if (!silent) {
+        logger.info('🔍 Validando proveedores de pago...')
+      }
 
       // Get list of available providers
       const availableProviders = Object.keys(this.providers).filter(name => name !== 'mock')
 
-      logger.info('📦 Proveedores de pago encontrados:')
-      availableProviders.forEach(provider => {
-        logger.info(`   - ${provider.charAt(0).toUpperCase() + provider.slice(1)}`)
-      })
+      if (!silent) {
+        logger.info('📦 Proveedores de pago encontrados:')
+        availableProviders.forEach(provider => {
+          logger.info(`   - ${provider.charAt(0).toUpperCase() + provider.slice(1)}`)
+        })
+      }
+
+      // Resultado por proveedor
+      const providersResult = {}
 
       // Initialize each provider concurrently
       const initPromises = availableProviders.map(async (providerName) => {
         const provider = this.providers[providerName]
         if (provider && typeof provider.authenticate === 'function') {
-          logger.info(`\n🔐 ${providerName.charAt(0).toUpperCase() + providerName.slice(1)} - Autenticación:`)
+          if (!silent) {
+            logger.info(`\n🔐 ${providerName.charAt(0).toUpperCase() + providerName.slice(1)} - Autenticación:`)
+          }
           try {
-            await provider.authenticate()
-            logger.info(`✅ ${providerName} authentication successful on startup`)
+            await provider.authenticate({ silent })
 
             // Verificación adicional para Cobre
+            let tokenValid = true
+            let tokenExpiration = null
             if (providerName === 'cobre') {
-              if (provider.isTokenValid && provider.isTokenValid()) {
-                logger.info(`✅ ${providerName} token validation successful`)
-              } else {
-                logger.warn(`⚠️ ${providerName} token validation failed`)
+              tokenValid = provider.isTokenValid && provider.isTokenValid()
+              tokenExpiration = provider.tokenExpiration || null
+              if (!silent) {
+                if (tokenValid) {
+                  logger.info(`✅ ${providerName} token validation successful`)
+                } else {
+                  logger.warn(`⚠️ ${providerName} token validation failed`)
+                }
               }
+            }
+
+            providersResult[providerName] = {
+              authenticated: true,
+              tokenValid,
+              tokenExpiration
+            }
+
+            if (!silent) {
+              logger.info(`✅ ${providerName} authentication successful on startup`)
             }
 
             return { provider: providerName, status: 'success' }
           } catch (error) {
-            logger.error(`❌ Error inicializando ${providerName}:`, error.message)
+            providersResult[providerName] = {
+              authenticated: false,
+              error: error.message
+            }
+            if (!silent) {
+              logger.error(`❌ Error inicializando ${providerName}:`, error.message)
+            }
             return { provider: providerName, status: 'error', error: error.message }
           }
         }
+        providersResult[providerName] = { authenticated: false, skipped: true }
         return { provider: providerName, status: 'skipped' }
       })
 
@@ -98,23 +134,34 @@ class PaymentService {
       const successful = results.filter(r => r.status === 'fulfilled' && r.value.status === 'success').length
       const failed = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && r.value.status === 'error')).length
 
-      logger.info('\n📊 Inicialización de proveedores completada:')
-      logger.info(`   ✅ Exitosos: ${successful}`)
-      if (failed > 0) {
-        logger.info(`   ❌ Fallidos: ${failed}`)
+      if (!silent) {
+        logger.info('\n📊 Inicialización de proveedores completada:')
+        logger.info(`   ✅ Exitosos: ${successful}`)
+        if (failed > 0) {
+          logger.info(`   ❌ Fallidos: ${failed}`)
+        }
+
+        // Verificación final de estado de proveedores
+        logger.info('\n🔍 Estado final de proveedores:')
+        availableProviders.forEach(providerName => {
+          const isReady = this.isProviderReady(providerName)
+          const status = isReady ? '✅ Ready' : '❌ Not Ready'
+          logger.info(`   ${providerName}: ${status}`)
+        })
       }
 
-      // Verificación final de estado de proveedores
-      logger.info('\n🔍 Estado final de proveedores:')
-      availableProviders.forEach(providerName => {
-        const isReady = this.isProviderReady(providerName)
-        const status = isReady ? '✅ Ready' : '❌ Not Ready'
-        logger.info(`   ${providerName}: ${status}`)
-      })
-
       this.initialized = true
+
+      return {
+        success: true,
+        providers: providersResult,
+        successful,
+        failed
+      }
     } catch (error) {
-      logger.error('❌ Error durante la inicialización de proveedores:', error.message)
+      if (!silent) {
+        logger.error('❌ Error durante la inicialización de proveedores:', error.message)
+      }
       throw error
     }
   }

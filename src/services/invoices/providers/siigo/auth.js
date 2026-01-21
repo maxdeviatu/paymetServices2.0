@@ -17,10 +17,15 @@ class SiigoAuthService {
 
   /**
    * Autentica con Siigo y obtiene un token de acceso
+   * @param {Object} options - Opciones de autenticación
+   * @param {boolean} options.silent - Si es true, no emite logs (modo startup estructurado)
    */
-  async authenticate () {
+  async authenticate (options = {}) {
+    const { silent = false } = options
     try {
-      logger.info('🔐 Iniciando autenticación con Siigo...')
+      if (!silent) {
+        logger.info('🔐 Iniciando autenticación con Siigo...')
+      }
 
       const payload = {
         username: this.username,
@@ -38,8 +43,10 @@ class SiigoAuthService {
       // Calcula la expiración: resta 1 minuto para evitar expiración inminente
       this.tokenExpiration = new Date(Date.now() + (response.data.expires_in * 1000) - 60000)
 
-      logger.info('✅ Autenticación con Siigo exitosa')
-      logger.debug(`Token expira en: ${this.tokenExpiration.toLocaleString()}`)
+      if (!silent) {
+        logger.info('✅ Autenticación con Siigo exitosa')
+        logger.debug(`Token expira en: ${this.tokenExpiration.toLocaleString()}`)
+      }
 
       return this.accessToken
     } catch (error) {

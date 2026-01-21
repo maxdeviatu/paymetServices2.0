@@ -16,10 +16,15 @@ class CobreSubscriptionBootstrap {
 
   /**
    * Ejecuta el bootstrap de suscripción
+   * @param {Object} options - Opciones de ejecución
+   * @param {boolean} options.silent - Si es true, no emite logs (modo startup estructurado)
    */
-  async bootstrap () {
+  async bootstrap (options = {}) {
+    const { silent = false } = options
     try {
-      logger.info('🚀 CobreSubscriptionBootstrap: Starting subscription bootstrap')
+      if (!silent) {
+        logger.info('🚀 CobreSubscriptionBootstrap: Starting subscription bootstrap')
+      }
 
       // Verificar configuración
       if (!this.webhookUrl || !this.webhookSecret) {
@@ -31,19 +36,24 @@ class CobreSubscriptionBootstrap {
         throw new Error('Webhook URL must use HTTPS')
       }
 
-      logger.info('📋 Configuration verified:', {
-        webhookUrl: this.webhookUrl,
-        webhookSecret: this.webhookSecret ? '***configured***' : 'NOT SET',
-        baseUrl: this.baseURL
-      })
+      if (!silent) {
+        logger.info('📋 Configuration verified:', {
+          webhookUrl: this.webhookUrl,
+          webhookSecret: this.webhookSecret ? '***configured***' : 'NOT SET',
+          baseUrl: this.baseURL
+        })
 
-      // Obtener token de acceso
-      logger.info('🔐 Getting Cobre access token...')
+        logger.info('🔐 Getting Cobre access token...')
+      }
+
       const token = await auth.getAccessToken()
-      logger.info('✅ Cobre access token obtained successfully')
 
-      // Obtener eventos disponibles
-      const availableEvents = await this.getAvailableEvents(token)
+      if (!silent) {
+        logger.info('✅ Cobre access token obtained successfully')
+      }
+
+      // Obtener eventos disponibles (silenciosamente)
+      const availableEvents = await this.getAvailableEvents(token, { silent })
 
       // Definir eventos requeridos - ciclo completo de transacciones
       const requiredEvents = [
@@ -52,16 +62,20 @@ class CobreSubscriptionBootstrap {
         'money_movements.status.rejected', // Cuando una transacción es rechazada
         'money_movements.status.failed', // Cuando una transacción falla
         'money_movements.status.canceled' // Cuando una transacción es cancelada
-        // Estos eventos nos permiten rastrear el ciclo completo de vida de las transacciones
       ]
 
       // Filtrar eventos disponibles
-      const filteredEvents = this.filterAvailableEvents(requiredEvents, availableEvents)
+      const filteredEvents = this.filterAvailableEvents(requiredEvents, availableEvents, { silent })
 
       // Verificar suscripciones existentes
-      logger.info('🔍 Checking existing subscriptions...')
+      if (!silent) {
+        logger.info('🔍 Checking existing subscriptions...')
+      }
       const existingSubscriptions = await this.getExistingSubscriptions(token)
-      logger.info(`📊 Found ${existingSubscriptions.length} existing subscription(s)`)
+
+      if (!silent) {
+        logger.info(`📊 Found ${existingSubscriptions.length} existing subscription(s)`)
+      }
 
       // Verificar si ya existe una suscripción para nuestro webhook
       const existingSubscription = existingSubscriptions.find(sub =>
@@ -69,41 +83,53 @@ class CobreSubscriptionBootstrap {
       )
 
       if (existingSubscription) {
-        logger.info('✅ Found existing subscription for our webhook:', {
-          subscriptionId: existingSubscription.id,
-          url: existingSubscription.url,
-          events: existingSubscription.events,
-          createdAt: existingSubscription.created_at
-        })
+        if (!silent) {
+          logger.info('✅ Found existing subscription for our webhook:', {
+            subscriptionId: existingSubscription.id,
+            url: existingSubscription.url,
+            events: existingSubscription.events,
+            createdAt: existingSubscription.created_at
+          })
+        }
 
         // Verificar si necesitamos actualizar los eventos
-        const needsUpdate = this.needsEventUpdate(existingSubscription.events, filteredEvents)
+        const needsUpdate = this.needsEventUpdate(existingSubscription.events, filteredEvents, { silent })
 
         if (needsUpdate) {
-          logger.info('🔄 Updating subscription events...')
-          const updatedSubscription = await this.updateSubscription(token, existingSubscription.id, filteredEvents)
-          logger.info('✅ Subscription updated successfully:', {
-            subscriptionId: updatedSubscription.id,
-            events: updatedSubscription.events
-          })
+          if (!silent) {
+            logger.info('🔄 Updating subscription events...')
+          }
+          const updatedSubscription = await this.updateSubscription(token, existingSubscription.id, filteredEvents, { silent })
+          if (!silent) {
+            logger.info('✅ Subscription updated successfully:', {
+              subscriptionId: updatedSubscription.id,
+              events: updatedSubscription.events
+            })
+          }
           return updatedSubscription
         } else {
-          logger.info('✅ Subscription is up to date, no changes needed')
+          if (!silent) {
+            logger.info('✅ Subscription is up to date, no changes needed')
+          }
           return existingSubscription
         }
       }
 
       // Crear nueva suscripción
-      logger.info('🆕 Creating new subscription...')
-      const newSubscription = await this.createSubscription(token, filteredEvents)
+      if (!silent) {
+        logger.info('🆕 Creating new subscription...')
+      }
+      const newSubscription = await this.createSubscription(token, filteredEvents, { silent })
 
-      logger.info('🎉 Subscription created successfully:', {
-        subscriptionId: newSubscription.id,
-        url: newSubscription.url,
-        events: newSubscription.events,
-        createdAt: newSubscription.created_at,
-        description: newSubscription.description
-      })
+      if (!silent) {
+        logger.info('🎉 Subscription created successfully:', {
+          subscriptionId: newSubscription.id,
+          url: newSubscription.url,
+          events: newSubscription.events,
+          createdAt: newSubscription.created_at,
+          description: newSubscription.description
+        })
+      }
 
       return newSubscription
     } catch (error) {
@@ -143,13 +169,18 @@ class CobreSubscriptionBootstrap {
    * Verifica si necesita actualizar los eventos de la suscripción
    * @param {Array} currentEvents - Eventos actuales
    * @param {Array} requiredEvents - Eventos requeridos
+   * @param {Object} options - Opciones
+   * @param {boolean} options.silent - Si es true, no emite logs
    * @returns {boolean} - true si necesita actualización
    */
-  needsEventUpdate (currentEvents, requiredEvents) {
+  needsEventUpdate (currentEvents, requiredEvents, options = {}) {
+    const { silent = false } = options
     const missingEvents = requiredEvents.filter(event => !currentEvents.includes(event))
 
     if (missingEvents.length > 0) {
-      logger.info('🔄 Missing events that need to be added:', missingEvents)
+      if (!silent) {
+        logger.info('🔄 Missing events that need to be added:', missingEvents)
+      }
       return true
     }
 
@@ -160,9 +191,12 @@ class CobreSubscriptionBootstrap {
    * Crea una nueva suscripción
    * @param {string} token - Token de acceso
    * @param {Array} events - Eventos para la suscripción
+   * @param {Object} options - Opciones
+   * @param {boolean} options.silent - Si es true, no emite logs
    * @returns {Promise<Object>} - Suscripción creada
    */
-  async createSubscription (token, events) {
+  async createSubscription (token, events, options = {}) {
+    const { silent = false } = options
     try {
       const subscriptionData = {
         description: 'Innovate Learning Payment Webhooks - Complete Payment Events',
@@ -171,12 +205,14 @@ class CobreSubscriptionBootstrap {
         event_signature_key: this.webhookSecret
       }
 
-      logger.info('📝 Creating subscription with data:', {
-        description: subscriptionData.description,
-        events: subscriptionData.events,
-        url: subscriptionData.url,
-        hasSignatureKey: !!subscriptionData.event_signature_key
-      })
+      if (!silent) {
+        logger.info('📝 Creating subscription with data:', {
+          description: subscriptionData.description,
+          events: subscriptionData.events,
+          url: subscriptionData.url,
+          hasSignatureKey: !!subscriptionData.event_signature_key
+        })
+      }
 
       const response = await axios.post(`${this.baseURL}/v1/subscriptions`, subscriptionData, {
         headers: {
@@ -185,10 +221,12 @@ class CobreSubscriptionBootstrap {
         }
       })
 
-      logger.info('✅ Subscription API call successful:', {
-        status: response.status,
-        subscriptionId: response.data.id
-      })
+      if (!silent) {
+        logger.info('✅ Subscription API call successful:', {
+          status: response.status,
+          subscriptionId: response.data.id
+        })
+      }
 
       return response.data
     } catch (error) {
@@ -207,18 +245,23 @@ class CobreSubscriptionBootstrap {
    * @param {string} token - Token de acceso
    * @param {string} subscriptionId - ID de la suscripción
    * @param {Array} events - Eventos para la suscripción
+   * @param {Object} options - Opciones
+   * @param {boolean} options.silent - Si es true, no emite logs
    * @returns {Promise<Object>} - Suscripción actualizada
    */
-  async updateSubscription (token, subscriptionId, events) {
+  async updateSubscription (token, subscriptionId, events, options = {}) {
+    const { silent = false } = options
     try {
       const updateData = {
         events
       }
 
-      logger.info('📝 Updating subscription:', {
-        subscriptionId,
-        events: updateData.events
-      })
+      if (!silent) {
+        logger.info('📝 Updating subscription:', {
+          subscriptionId,
+          events: updateData.events
+        })
+      }
 
       const response = await axios.put(`${this.baseURL}/v1/subscriptions/${subscriptionId}`, updateData, {
         headers: {
@@ -227,10 +270,12 @@ class CobreSubscriptionBootstrap {
         }
       })
 
-      logger.info('✅ Subscription update API call successful:', {
-        status: response.status,
-        subscriptionId: response.data.id
-      })
+      if (!silent) {
+        logger.info('✅ Subscription update API call successful:', {
+          status: response.status,
+          subscriptionId: response.data.id
+        })
+      }
 
       return response.data
     } catch (error) {
@@ -247,11 +292,16 @@ class CobreSubscriptionBootstrap {
   /**
    * Obtiene los eventos disponibles en Cobre
    * @param {string} token - Token de acceso
+   * @param {Object} options - Opciones
+   * @param {boolean} options.silent - Si es true, no emite logs
    * @returns {Promise<Array>} - Lista de eventos disponibles
    */
-  async getAvailableEvents (token) {
+  async getAvailableEvents (token, options = {}) {
+    const { silent = false } = options
     try {
-      logger.info('🔍 Getting available events from Cobre...')
+      if (!silent) {
+        logger.info('🔍 Getting available events from Cobre...')
+      }
 
       const response = await axios.get(`${this.baseURL}/v1/subscribable_events`, {
         headers: {
@@ -262,10 +312,12 @@ class CobreSubscriptionBootstrap {
 
       const availableEvents = response.data.contents || []
 
-      logger.info('📋 Available events from Cobre:', {
-        total: availableEvents.length,
-        events: availableEvents.map(e => e.subscriptionKey)
-      })
+      if (!silent) {
+        logger.info('📋 Available events from Cobre:', {
+          total: availableEvents.length,
+          events: availableEvents.map(e => e.subscriptionKey)
+        })
+      }
 
       return availableEvents
     } catch (error) {
@@ -281,19 +333,24 @@ class CobreSubscriptionBootstrap {
    * Filtra los eventos requeridos basándose en los disponibles
    * @param {Array} requiredEvents - Eventos que queremos
    * @param {Array} availableEvents - Eventos disponibles en Cobre
+   * @param {Object} options - Opciones
+   * @param {boolean} options.silent - Si es true, no emite logs
    * @returns {Array} - Eventos filtrados y disponibles
    */
-  filterAvailableEvents (requiredEvents, availableEvents) {
+  filterAvailableEvents (requiredEvents, availableEvents, options = {}) {
+    const { silent = false } = options
     const availableKeys = availableEvents.map(e => e.subscriptionKey)
 
     const filteredEvents = requiredEvents.filter(event => availableKeys.includes(event))
     const missingEvents = requiredEvents.filter(event => !availableKeys.includes(event))
 
-    if (missingEvents.length > 0) {
+    if (missingEvents.length > 0 && !silent) {
       logger.warn('⚠️ Some required events are not available in Cobre:', missingEvents)
     }
 
-    logger.info('✅ Events that will be subscribed:', filteredEvents)
+    if (!silent) {
+      logger.info('✅ Events that will be subscribed:', filteredEvents)
+    }
 
     return filteredEvents
   }

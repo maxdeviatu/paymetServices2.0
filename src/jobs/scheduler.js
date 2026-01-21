@@ -15,14 +15,20 @@ class JobScheduler {
   }
 
   /**
-   * Register a job
+   * Register a job (silencioso por defecto durante startup)
+   * @param {Function} job - Clase del job a registrar
+   * @param {Object} options - Opciones
+   * @param {boolean} options.silent - Si es true, no emite logs
    */
-  registerJob (job) {
+  registerJob (job, options = {}) {
+    const { silent = false } = options
     try {
       const jobInstance = new job()
       this.jobs.set(jobInstance.name, jobInstance)
 
-      logger.info(`Job registered: ${jobInstance.name}`)
+      if (!silent) {
+        logger.info(`Job registered: ${jobInstance.name}`)
+      }
       return jobInstance
     } catch (error) {
       logger.error(`Failed to register job: ${job.name}`, error)
@@ -32,55 +38,75 @@ class JobScheduler {
 
   /**
    * Start all registered jobs
+   * @param {Object} options - Opciones
+   * @param {boolean} options.silent - Si es true, no emite logs (retorna resumen)
+   * @returns {Object} Resumen de jobs iniciados
    */
-  start () {
+  start (options = {}) {
+    const { silent = false } = options
+
     if (this.running) {
-      logger.warn('Job scheduler is already running')
-      return
+      if (!silent) {
+        logger.warn('Job scheduler is already running')
+      }
+      return { alreadyRunning: true }
     }
 
-    logger.info('Starting job scheduler...')
+    if (!silent) {
+      logger.info('Starting job scheduler...')
+    }
     this.running = true
 
-    // Register default jobs
-    this.registerJob(OrderTimeoutJob)
+    // Limpiar jobs previos para evitar duplicados
+    this.jobs.clear()
 
-    // Siempre registrar waitlist job para permitir ejecución manual
-    this.registerJob(WaitlistProcessingJob)
+    // Register default jobs (silenciosamente)
+    this.registerJob(OrderTimeoutJob, { silent: true })
+    this.registerJob(WaitlistProcessingJob, { silent: true })
+    this.registerJob(EmailRetryJob, { silent: true })
 
-    // Registrar email retry job
-    this.registerJob(EmailRetryJob)
-
-    if (process.env.ENABLE_WAITLIST_PROCESSING === 'true') {
-      logger.info('✅ Waitlist processing job habilitado para ejecución automática')
-    } else {
-      logger.info('⏸️  Waitlist processing job registrado pero pausado (ENABLE_WAITLIST_PROCESSING=false)')
-    }
-
-    if (process.env.ENABLE_EMAIL_RETRY === 'true') {
-      logger.info('✅ Email retry job habilitado para ejecución automática')
-    } else {
-      logger.info('⏸️  Email retry job registrado pero pausado (ENABLE_EMAIL_RETRY=false)')
-    }
+    // Determinar qué jobs están activos vs pausados
+    const activeJobs = []
+    const pausedJobs = []
 
     // Start each job based on its schedule
-    for (const [name, job] of this.jobs) {
-      // Solo iniciar automáticamente si está habilitado o no es waitlist/emailRetry
-      if ((name === 'waitlistProcessing' && process.env.ENABLE_WAITLIST_PROCESSING !== 'true') ||
-          (name === 'emailRetry' && process.env.ENABLE_EMAIL_RETRY !== 'true')) {
-        logger.info(`Job ${name} registrado pero no iniciado automáticamente`)
-        continue
+    for (const [name] of this.jobs) {
+      // Verificar si el job debe iniciar automáticamente
+      const shouldStart =
+        (name === 'waitlistProcessing' && process.env.ENABLE_WAITLIST_PROCESSING === 'true') ||
+        (name === 'emailRetry' && process.env.ENABLE_EMAIL_RETRY === 'true') ||
+        (name !== 'waitlistProcessing' && name !== 'emailRetry')
+
+      if (shouldStart) {
+        this.startJob(name, { silent })
+        activeJobs.push(name)
+      } else {
+        pausedJobs.push(name)
+        if (!silent) {
+          logger.info(`Job ${name} registrado pero no iniciado automáticamente`)
+        }
       }
-      this.startJob(name)
     }
 
-    logger.info(`Job scheduler started with ${this.jobs.size} jobs`)
+    if (!silent) {
+      logger.info(`Job scheduler started with ${this.jobs.size} jobs`)
+    }
+
+    return {
+      active: activeJobs,
+      paused: pausedJobs,
+      total: this.jobs.size
+    }
   }
 
   /**
    * Start a specific job
+   * @param {string} jobName - Nombre del job
+   * @param {Object} options - Opciones
+   * @param {boolean} options.silent - Si es true, no emite logs
    */
-  startJob (jobName) {
+  startJob (jobName, options = {}) {
+    const { silent = false } = options
     const job = this.jobs.get(jobName)
     if (!job) {
       throw new Error(`Job ${jobName} not found`)
@@ -125,7 +151,9 @@ class JobScheduler {
 
       this.intervals.set(jobName, interval)
 
-      logger.info(`Job ${jobName} started with ${intervalMs}ms interval`)
+      if (!silent) {
+        logger.info(`Job ${jobName} started with ${intervalMs}ms interval`)
+      }
     } catch (error) {
       logger.error(`Failed to start job ${jobName}:`, error)
       throw error
@@ -215,18 +243,7 @@ process.on('SIGINT', async () => {
   await jobScheduler.shutdown()
 })
 
-// Register jobs when module is loaded
-if (process.env.NODE_ENV !== 'test') {
-  // Always register order timeout job
-  jobScheduler.registerJob(OrderTimeoutJob)
-
-  // Always register waitlist processing (for manual execution even if disabled)
-  jobScheduler.registerJob(WaitlistProcessingJob)
-
-  // Only register invoice processing if enabled
-  if (process.env.ENABLE_INVOICE_PROCESSING !== 'false') {
-    jobScheduler.registerJob(InvoiceProcessingJob)
-  }
-}
+// Nota: Los jobs se registran en start() para evitar duplicados
+// No registrar aquí al cargar el módulo
 
 module.exports = jobScheduler

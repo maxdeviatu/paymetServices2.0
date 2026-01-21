@@ -2,6 +2,38 @@ const { Sequelize } = require('sequelize')
 const config = require('../config')
 const logger = require('../config/logger')
 
+// Control de verbosidad durante el inicio
+let startupMode = true
+let syncQueryCount = 0
+
+/**
+ * Función de logging para Sequelize
+ * En modo startup, silencia queries de sincronización (CREATE TABLE, SELECT, etc.)
+ * Solo muestra logs detallados si DEBUG_STARTUP=true o LOG_LEVEL=debug
+ */
+const sequelizeLogging = (msg) => {
+  // Durante el inicio, solo contar queries sin mostrarlas
+  if (startupMode) {
+    // Contar CREATE TABLE para el resumen
+    if (/CREATE TABLE/.test(msg)) {
+      syncQueryCount++
+    }
+    // Solo mostrar si debug está habilitado
+    if (process.env.DEBUG_STARTUP === 'true' || process.env.LOG_LEVEL === 'debug') {
+      logger.logDB('sequelize', { message: msg })
+    }
+    return
+  }
+
+  // Después del inicio, comportamiento normal (solo en desarrollo)
+  if (process.env.NODE_ENV === 'development') {
+    // Silenciar ALTER idempotentes
+    if (!/ALTER TABLE/.test(msg) || msg.includes('Elapsed time: 0ms')) {
+      logger.logDB('sequelize', { message: msg })
+    }
+  }
+}
+
 // Crear instancia de Sequelize con configuración optimizada para alto volumen
 const sequelize = new Sequelize(
   config.DB_CONFIG.database,
@@ -11,12 +43,7 @@ const sequelize = new Sequelize(
     host: config.DB_CONFIG.host,
     port: config.DB_CONFIG.port,
     dialect: config.DB_CONFIG.dialect,
-    logging: (msg) => {
-      // Silenciar ALTER 'idempotentes' (duración < 1 ms)
-      if (!/ALTER TABLE/.test(msg) || msg.includes('Elapsed time: 0ms')) {
-        logger.logDB('sequelize', { message: msg })
-      }
-    },
+    logging: sequelizeLogging,
     define: {
       timestamps: true,
       underscored: true
@@ -48,13 +75,27 @@ const sequelize = new Sequelize(
 
 /**
  * Inicializa la conexión a la base de datos y sincroniza los modelos
- * @returns {Promise<void>}
+ * @param {Object} options - Opciones de inicialización
+ * @param {boolean} options.silent - Si es true, no emite logs (para modo startup estructurado)
+ * @returns {Promise<Object>} Resultado de la inicialización
  */
-async function initDB () {
+async function initDB (options = {}) {
+  const { silent = false } = options
+
   try {
+    // Resetear contador de queries
+    syncQueryCount = 0
+    startupMode = true
+
     // Autenticar conexión
     await sequelize.authenticate()
-    logger.info('Conexión a la base de datos establecida correctamente')
+
+    if (!silent) {
+      logger.info('Conexión a la base de datos establecida correctamente')
+    }
+
+    let syncDuration = 0
+    let modelsCount = 0
 
     // En desarrollo, sincronizar modelos con la base de datos
     if (process.env.NODE_ENV !== 'production') {
@@ -63,19 +104,33 @@ async function initDB () {
         // Usar variable de entorno para activar/desactivar alter
         const syncOptions = process.env.SCHEMA_ALTER === '1' ? { alter: true, drop: false } : { alter: false, drop: false }
         await sequelize.sync(syncOptions)
-        const endTime = Date.now()
-        const duration = endTime - startTime
-        logger.info(`Sincronización de modelos completada en ${duration}ms. Clean slate aplicado.`)
-        // TODO: Ejecutar seeders cuando process.env.DB_SEED === '1'
+
+        syncDuration = Date.now() - startTime
+        modelsCount = syncQueryCount // Número de CREATE TABLE ejecutados
+
+        if (!silent) {
+          logger.info(`Sincronización de modelos completada en ${syncDuration}ms. Clean slate aplicado.`)
+        }
       } catch (error) {
         logger.error('Error en sincronización:', error.message)
         throw error
       }
     } else {
-      logger.info('Modo producción: sincronización automática desactivada')
+      if (!silent) {
+        logger.info('Modo producción: sincronización automática desactivada')
+      }
     }
-    return true
+
+    // Desactivar modo startup para logs normales
+    startupMode = false
+
+    return {
+      success: true,
+      syncDuration,
+      modelsCount
+    }
   } catch (error) {
+    startupMode = false
     logger.error('Error al conectar con la base de datos:', error.message)
     throw error
   }

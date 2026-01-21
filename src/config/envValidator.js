@@ -227,30 +227,37 @@ class EnvironmentValidator {
 
   /**
    * Valida todas las variables de entorno
+   * @param {Object} options - Opciones de validación
+   * @param {boolean} options.silent - Si es true, no emite logs (modo startup estructurado)
    * @returns {Object} Resultado de la validación
    */
-  validate () {
+  validate (options = {}) {
+    const { silent = false } = options
     this.errors = []
     this.warnings = []
 
-    logger.info('🔍 Validando variables de entorno...')
+    if (!silent) {
+      logger.info('🔍 Validando variables de entorno...')
+    }
 
     // Validar cada categoría
     Object.entries(this.requiredVars).forEach(([category, vars]) => {
-      this.validateCategory(category, vars)
+      this.validateCategory(category, vars, { silent })
     })
 
     // Generar reporte
     const isValid = this.errors.length === 0
     const report = this.generateReport()
 
-    if (isValid) {
-      logger.info('✅ Validación de variables de entorno completada exitosamente')
-      if (this.warnings.length > 0) {
-        logger.warn(`⚠️ Se encontraron ${this.warnings.length} advertencia(s)`)
+    if (!silent) {
+      if (isValid) {
+        logger.info('✅ Validación de variables de entorno completada exitosamente')
+        if (this.warnings.length > 0) {
+          logger.warn(`⚠️ Se encontraron ${this.warnings.length} advertencia(s)`)
+        }
+      } else {
+        logger.error(`❌ Validación de variables de entorno falló con ${this.errors.length} error(es)`)
       }
-    } else {
-      logger.error(`❌ Validación de variables de entorno falló con ${this.errors.length} error(es)`)
     }
 
     return {
@@ -265,10 +272,16 @@ class EnvironmentValidator {
    * Valida una categoría de variables
    * @param {string} categoryName - Nombre de la categoría
    * @param {Object} vars - Variables de la categoría
+   * @param {Object} options - Opciones de validación
+   * @param {boolean} options.silent - Si es true, no emite logs
    */
-  validateCategory (categoryName, vars) {
+  validateCategory (categoryName, vars, options = {}) {
+    const { silent = false } = options
     const categoryDisplayName = this.getCategoryDisplayName(categoryName)
-    logger.info(`📋 Validando ${categoryDisplayName}...`)
+
+    if (!silent) {
+      logger.info(`📋 Validando ${categoryDisplayName}...`)
+    }
 
     let categoryErrors = 0
     let categoryWarnings = 0
@@ -297,15 +310,17 @@ class EnvironmentValidator {
       }
     })
 
-    // Log del resultado de la categoría
-    if (categoryErrors === 0 && categoryWarnings === 0) {
-      logger.info(`   ✅ ${categoryDisplayName}: Todas las variables configuradas correctamente`)
-    } else {
-      if (categoryErrors > 0) {
-        logger.error(`   ❌ ${categoryDisplayName}: ${categoryErrors} error(es)`)
-      }
-      if (categoryWarnings > 0) {
-        logger.warn(`   ⚠️ ${categoryDisplayName}: ${categoryWarnings} advertencia(s)`)
+    // Log del resultado de la categoría (solo si no es silencioso)
+    if (!silent) {
+      if (categoryErrors === 0 && categoryWarnings === 0) {
+        logger.info(`   ✅ ${categoryDisplayName}: Todas las variables configuradas correctamente`)
+      } else {
+        if (categoryErrors > 0) {
+          logger.error(`   ❌ ${categoryDisplayName}: ${categoryErrors} error(es)`)
+        }
+        if (categoryWarnings > 0) {
+          logger.warn(`   ⚠️ ${categoryDisplayName}: ${categoryWarnings} advertencia(s)`)
+        }
       }
     }
   }
@@ -539,13 +554,14 @@ class EnvironmentValidator {
    */
   getCategoryDisplayName (categoryName) {
     const displayNames = {
-      server: 'Configuración del Servidor',
-      database: 'Configuración de Base de Datos',
-      jwt: 'Configuración JWT',
-      admin: 'Configuración de Super Admin',
-      cobre: 'Configuración de Cobre',
-      webhooks: 'Configuración de Webhooks',
-      optional: 'Configuración Opcional'
+      server: 'Servidor',
+      database: 'Base de Datos',
+      jwt: 'JWT',
+      admin: 'Super Admin',
+      cobre: 'Cobre',
+      webhooks: 'Webhooks',
+      invoicing: 'Facturación',
+      optional: 'Opcional'
     }
 
     return displayNames[categoryName] || categoryName

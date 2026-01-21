@@ -10,28 +10,38 @@ class EmailQueueService {
     this.intervalSeconds = parseInt(process.env.WAITLIST_EMAIL_INTERVAL_SECONDS) || 30
     this.maxRetries = parseInt(process.env.WAITLIST_EMAIL_MAX_RETRIES) || 3
     this.maxQueueSize = parseInt(process.env.WAITLIST_EMAIL_QUEUE_MAX_SIZE) || 1000
-
-    logger.info('EmailQueueService initialized (v2.0 - Direct sending mode)', {
-      intervalSeconds: this.intervalSeconds,
-      maxRetries: this.maxRetries,
-      maxQueueSize: this.maxQueueSize
-    })
+    this.initialized = false
   }
 
   /**
-   * Inicializar el servicio (compatibilidad)
+   * Inicializar el servicio
+   * @param {Object} options - Opciones de inicialización
+   * @param {boolean} options.silent - Si es true, no emite logs (modo startup estructurado)
+   * @returns {Object} Estado de inicialización
    */
-  initialize () {
-    logger.info('EmailQueueService: Starting initialization', {
-      queueSize: 0,
-      isProcessing: false,
-      intervalSeconds: this.intervalSeconds
-    })
+  initialize (options = {}) {
+    const { silent = false } = options
 
-    logger.info('EmailQueueService: Initialization completed', {
+    if (!silent) {
+      logger.info('EmailQueueService: Starting initialization', {
+        queueSize: 0,
+        isProcessing: false,
+        intervalSeconds: this.intervalSeconds
+      })
+
+      logger.info('EmailQueueService: Initialization completed', {
+        ready: true,
+        intervalSeconds: this.intervalSeconds
+      })
+    }
+
+    this.initialized = true
+
+    return {
       ready: true,
+      mode: 'modo directo v2.0',
       intervalSeconds: this.intervalSeconds
-    })
+    }
   }
 
   /**

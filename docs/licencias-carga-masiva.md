@@ -220,14 +220,16 @@ WINDOWS-11-PRO,WIN11-XXXX-YYYY-4444
 2. **Validación de existencia**: Todas las licencias deben existir
 3. **Validación de producto**: El `productRef` debe coincidir con la licencia
 4. **Validación de estado**: Solo licencias `AVAILABLE` pueden desmontarse
-5. **Renombrado**: La `licenseKey` cambia a `ANULADA-{últimos 5 caracteres}`
+5. **Renombrado**: La `licenseKey` cambia a `ANULADA-{ID de licencia}`
 
 ### Ejemplo de Transformación
 
-| Antes | Después |
-|-------|---------|
-| `OFF365-AAAA-BBBB-1111` | `ANULADA-B1111` |
-| `WIN11-XXXX-YYYY-4444` | `ANULADA-Y4444` |
+| Antes | ID | Después |
+|-------|-----|---------|
+| `OFF365-AAAA-BBBB-1111` | 42 | `ANULADA-42` |
+| `WIN11-XXXX-YYYY-4444` | 156 | `ANULADA-156` |
+
+> **Nota**: Se usa el ID de la licencia (no los últimos caracteres) para garantizar unicidad en operaciones masivas.
 
 ---
 

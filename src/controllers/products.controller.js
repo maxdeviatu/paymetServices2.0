@@ -1,4 +1,5 @@
 const productService = require('../services/product.service')
+const logger = require('../config/logger')
 
 /**
  * Controlador para la gestión de productos
@@ -198,6 +199,89 @@ class ProductsController {
         message: 'Producto eliminado exitosamente'
       })
     } catch (error) {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      })
+    }
+  }
+
+  /**
+   * Carga masiva de productos desde CSV
+   * Columnas requeridas: name, productRef, price
+   * Columnas opcionales: currency, description, features, image, provider, license_type
+   */
+  async bulkUpload (req, res) {
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: 'Se requiere un archivo CSV'
+        })
+      }
+
+      // Parsear CSV usando csv-parse/sync
+      const csv = require('csv-parse/sync')
+      const csvContent = req.file.buffer.toString('utf8')
+
+      let rows
+      try {
+        rows = csv.parse(csvContent, {
+          columns: true,
+          trim: true,
+          skip_empty_lines: true
+        })
+      } catch (parseError) {
+        return res.status(400).json({
+          success: false,
+          message: `Error al parsear el CSV: ${parseError.message}`
+        })
+      }
+
+      if (rows.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'El archivo CSV está vacío o no tiene datos válidos'
+        })
+      }
+
+      // Validar columnas requeridas
+      const requiredColumns = ['name', 'productRef', 'price']
+      const firstRow = rows[0]
+      const missingColumns = requiredColumns.filter(col => !(col in firstRow))
+
+      if (missingColumns.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Columnas requeridas faltantes: ${missingColumns.join(', ')}`
+        })
+      }
+
+      // Llamar al servicio para importar
+      const result = await productService.bulkImport(rows, req.admin?.id)
+
+      logger.logBusiness('bulkUploadProducts.success', {
+        adminId: req.admin?.id,
+        filename: req.file.originalname,
+        imported: result.imported,
+        total: rows.length
+      })
+
+      return res.status(201).json({
+        success: true,
+        message: `Se importaron ${result.imported} productos exitosamente`,
+        data: {
+          imported: result.imported,
+          total: rows.length,
+          products: result.products
+        }
+      })
+    } catch (error) {
+      logger.logError(error, {
+        operation: 'bulkUploadProducts',
+        filename: req.file?.originalname
+      })
+
       return res.status(400).json({
         success: false,
         message: error.message

@@ -437,10 +437,10 @@ async function bulkDismount (rows, adminId) {
       }
 
       // 8. Update all licenses to ANNULLED status
+      // Use license ID to guarantee uniqueness (last5 can cause collisions in bulk operations)
       for (const license of licenses) {
-        const last5 = license.licenseKey.slice(-5)
         await license.update({
-          licenseKey: `ANULADA-${last5}`,
+          licenseKey: `ANULADA-${license.id}`,
           status: 'ANNULLED',
           orderId: null,
           reservedAt: null

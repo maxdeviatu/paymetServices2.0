@@ -89,158 +89,212 @@ app.use((err, req, res, next) => {
   })
 })
 
+// Versión del paquete para el banner
+const { version } = require('../package.json')
+
 /**
- * Inicializar conexión con Siigo al startup
+ * Inicializar conexión con Siigo (silencioso, retorna resultado)
  */
 async function initializeSiigoConnection () {
+  if (process.env.NODE_ENV === 'test') {
+    return { success: false, skipped: true }
+  }
+
   try {
-    // Solo intentar conectar si no estamos en modo test
-    if (process.env.NODE_ENV === 'test') {
-      logger.info('Skipping Siigo initialization in test environment')
-      return
-    }
-
-    logger.info('🔗 Inicializando conexión con Siigo...')
-    const result = await SiigoInitializer.initialize()
-
-    if (result.success) {
-      logger.info('✅ Conexión con Siigo establecida exitosamente', {
-        connected: result.status.connected,
-        lastAttempt: result.status.lastAttempt,
-        tokenExpiration: result.status.tokenExpiration
-      })
-    } else {
-      logger.warn('⚠️ No se pudo establecer conexión con Siigo', {
-        connected: result.status.connected,
-        error: result.error,
-        lastAttempt: result.status.lastAttempt
-      })
-    }
+    const result = await SiigoInitializer.initialize({ silent: true })
+    return result
   } catch (error) {
-    logger.error('❌ Error durante la inicialización de Siigo', {
-      error: error.message,
-      stack: error.stack
-    })
-
-    // No fallar el servidor por problemas con Siigo
-    logger.warn('El servidor continuará sin conexión a Siigo')
+    logger.detail('Siigo error', error.message)
+    return { success: false, error: error.message }
   }
 }
 
 /**
- * Inicializar suscripción de webhooks de Cobre
+ * Inicializar suscripción de webhooks de Cobre (silencioso, retorna resultado)
  */
 async function initializeCobreWebhookSubscription () {
+  if (process.env.NODE_ENV === 'test') {
+    return { success: false, skipped: true }
+  }
+
+  if (!process.env.COBRE_WEBHOOK_URL || !process.env.COBRE_WEBHOOK_SECRET) {
+    return { success: false, skipped: true, reason: 'config_missing' }
+  }
+
   try {
-    // Solo ejecutar en producción o si está explícitamente habilitado
-    if (process.env.NODE_ENV === 'test') {
-      logger.info('Skipping Cobre webhook subscription in test environment')
-      return
-    }
-
-    // Verificar si las variables de entorno están configuradas
-    if (!process.env.COBRE_WEBHOOK_URL || !process.env.COBRE_WEBHOOK_SECRET) {
-      logger.warn('Cobre webhook configuration missing, skipping subscription setup')
-      logger.warn('Required env vars: COBRE_WEBHOOK_URL, COBRE_WEBHOOK_SECRET')
-      return
-    }
-
-    logger.info('Initializing Cobre webhook subscription...')
-
     const CobreSubscriptionBootstrap = require('./scripts/bootstrapCobreSubscription')
     const bootstrap = new CobreSubscriptionBootstrap()
-
-    const result = await bootstrap.bootstrap()
-
-    logger.info('✅ Cobre webhook subscription initialized successfully', {
-      subscriptionId: result.id,
-      url: result.url,
-      events: result.events,
-      createdAt: result.created_at
-    })
+    const result = await bootstrap.bootstrap({ silent: true })
+    return { success: true, ...result }
   } catch (error) {
-    logger.error('❌ Failed to initialize Cobre webhook subscription', {
-      error: error.message,
-      stack: error.stack
-    })
-
-    // No fallar el servidor por problemas de webhook
-    logger.warn('Server will continue without webhook subscription')
+    logger.detail('Cobre webhook error', error.message)
+    return { success: false, error: error.message }
   }
 }
 
-// Función para inicializar el servidor
+/**
+ * Función principal para inicializar el servidor con logs estructurados por fases
+ */
 async function initializeServer () {
+  const startTime = Date.now()
+  const warnings = []
+
   try {
-    // 1. VALIDAR VARIABLES DE ENTORNO ANTES QUE NADA
-    logger.info('🔧 Iniciando validación de configuración...')
+    // ═══════════════════════════════════════════════════════════════
+    // BANNER INICIAL
+    // ═══════════════════════════════════════════════════════════════
+    logger.banner(`PAYMENT SERVICES v${version} | Ambiente: ${process.env.NODE_ENV || 'development'} | Puerto: ${PORT}`, 'start')
+
+    // ═══════════════════════════════════════════════════════════════
+    // FASE 1: VALIDACIÓN DE CONFIGURACIÓN
+    // ═══════════════════════════════════════════════════════════════
+    logger.phase(1, 5, 'Validación de Configuración')
+
     const envValidator = new EnvironmentValidator()
-    const validationResult = envValidator.validate()
+    const validationResult = envValidator.validate({ silent: true })
 
     if (!validationResult.isValid) {
-      logger.error('❌ CONFIGURACIÓN INVÁLIDA - No se puede iniciar el servidor')
+      logger.fail('Configuración inválida - No se puede iniciar el servidor')
       envValidator.printDetailedReport(validationResult.report)
       logger.info('📖 Consulta VARIABLES_ENTORNO.md y .env.example para más información')
       process.exit(1)
     }
 
-    // Mostrar resumen de configuración
-    logger.info('✅ Validación de variables de entorno completada exitosamente')
+    // Mostrar categorías validadas
+    const categories = Object.keys(validationResult.report.categories)
+      .filter(cat => validationResult.report.categories[cat].errors === 0)
+      .map(cat => envValidator.getCategoryDisplayName(cat).replace('Configuración de ', '').replace('Configuración ', ''))
+    logger.check(categories.join(', '))
+
     if (validationResult.warnings.length > 0) {
-      logger.warn(`⚠️ Se encontraron ${validationResult.warnings.length} advertencia(s) - revisar logs`)
+      warnings.push(...validationResult.warnings)
+      logger.warning(`${validationResult.warnings.length} advertencia(s) (ver VARIABLES_ENTORNO.md)`)
     }
 
-    // 2. Inicializar la base de datos
-    logger.info('🔗 Inicializando conexión a base de datos...')
-    const dbConnected = await initDB()
+    // ═══════════════════════════════════════════════════════════════
+    // FASE 2: BASE DE DATOS
+    // ═══════════════════════════════════════════════════════════════
+    logger.phase(2, 5, 'Base de Datos')
 
-    if (!dbConnected) {
+    const dbResult = await initDB({ silent: true })
+
+    if (!dbResult.success) {
       throw new Error('No se pudo conectar a la base de datos')
     }
 
-    logger.info('Base de datos inicializada correctamente')
+    const dbConfig = require('./config').DB_CONFIG
+    logger.check(`PostgreSQL conectado (${dbConfig.host}:${dbConfig.port}/${dbConfig.database})`)
 
-    // Crear super administrador después de la sincronización
-    try {
-      await createSuperAdmin()
-      logger.info('Super administrador verificado/creado correctamente')
-    } catch (error) {
-      logger.warn('Error al crear super administrador (puede que ya exista):', error.message)
+    if (dbResult.modelsCount) {
+      logger.check(`${dbResult.modelsCount} modelos sincronizados en ${dbResult.syncDuration}ms`)
     }
 
-    // Iniciar el servidor
-    app.listen(PORT, () => {
-      logger.info(`Servidor corriendo en puerto ${PORT}`)
-      logger.info(`Ambiente: ${process.env.NODE_ENV}`)
-      logger.info(`Health check disponible en: http://localhost:${PORT}/health`)
-
-      // Iniciar job scheduler para tareas en segundo plano
-      if (process.env.NODE_ENV !== 'test') {
-        jobScheduler.start()
-        logger.info('Job scheduler iniciado')
-
-        // Iniciar servicio de cola de correos
-        const emailQueueService = require('./services/emailQueue.service')
-        emailQueueService.initialize()
-        logger.info('Email queue service initialized')
+    // Crear super administrador
+    try {
+      const adminResult = await createSuperAdmin({ silent: true })
+      if (adminResult.created) {
+        logger.check('Super administrador creado')
+      } else {
+        logger.detail('Super admin', 'ya existe')
       }
+    } catch (error) {
+      logger.detail('Super admin error', error.message)
+    }
 
-      // Inicializar proveedores de pago después de que todo esté listo
-      paymentService.initialize()
-        .then(async () => {
-          logger.info('Payment providers initialization completed')
+    // ═══════════════════════════════════════════════════════════════
+    // FASE 3: SERVICIOS INTERNOS
+    // ═══════════════════════════════════════════════════════════════
+    logger.phase(3, 5, 'Servicios Internos')
 
-          // Inicializar conexión con Siigo
-          await initializeSiigoConnection()
+    if (process.env.NODE_ENV !== 'test') {
+      // Job Scheduler
+      const schedulerResult = jobScheduler.start({ silent: true })
+      const activeJobs = schedulerResult.active || []
+      const pausedJobs = schedulerResult.paused || []
 
-          // Inicializar suscripción de webhooks de Cobre después de los proveedores
-          await initializeCobreWebhookSubscription()
-        })
-        .catch(error => {
-          logger.error('Failed to initialize payment providers:', error.message)
-        })
+      let jobStatus = `Job Scheduler: ${activeJobs.length} jobs activos`
+      if (activeJobs.length > 0) {
+        jobStatus += ` (${activeJobs.join(', ')})`
+      }
+      if (pausedJobs.length > 0) {
+        jobStatus += ` | ${pausedJobs.length} pausado(s)`
+      }
+      logger.check(jobStatus)
+
+      // Email Queue Service
+      const emailQueueService = require('./services/emailQueue.service')
+      const emailResult = emailQueueService.initialize({ silent: true })
+      logger.check(`Email Queue: ${emailResult.mode || 'modo directo v2.0'}`)
+    } else {
+      logger.check('Servicios omitidos (modo test)')
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // FASE 4: PROVEEDORES EXTERNOS
+    // ═══════════════════════════════════════════════════════════════
+    logger.phase(4, 5, 'Proveedores Externos')
+
+    // Inicializar proveedores de pago
+    const paymentResult = await paymentService.initialize({ silent: true })
+
+    // Mostrar estado de Cobre
+    if (paymentResult.providers?.cobre) {
+      const cobre = paymentResult.providers.cobre
+      if (cobre.authenticated) {
+        const tokenExpiry = cobre.tokenExpiration ? new Date(cobre.tokenExpiration).toLocaleTimeString('es-CO') : 'N/A'
+        logger.check(`Cobre: autenticado (token válido hasta ${tokenExpiry})`)
+      } else {
+        logger.warning('Cobre: no autenticado')
+      }
+    }
+
+    // Inicializar Siigo
+    const siigoResult = await initializeSiigoConnection()
+    if (siigoResult.success) {
+      const siigoExpiry = siigoResult.status?.tokenExpiration
+        ? new Date(siigoResult.status.tokenExpiration).toLocaleDateString('es-CO')
+        : 'N/A'
+      logger.check(`Siigo: conectado (token expira ${siigoExpiry})`)
+    } else if (siigoResult.skipped) {
+      logger.detail('Siigo', 'omitido (modo test)')
+    } else {
+      logger.warning('Siigo: no conectado')
+    }
+
+    // Inicializar webhook de Cobre
+    const webhookResult = await initializeCobreWebhookSubscription()
+    if (webhookResult.success) {
+      logger.check(`Webhook: suscripción activa (${webhookResult.id}) - ${webhookResult.events?.length || 0} eventos`)
+    } else if (webhookResult.skipped) {
+      logger.detail('Webhook', 'omitido')
+    } else {
+      logger.warning('Webhook: no configurado')
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // FASE 5: SERVIDOR HTTP
+    // ═══════════════════════════════════════════════════════════════
+    logger.phase(5, 5, 'Servidor HTTP')
+
+    await new Promise((resolve) => {
+      app.listen(PORT, () => {
+        logger.check(`Escuchando en http://localhost:${PORT}`)
+        logger.check(`Health check: http://localhost:${PORT}/health`)
+        resolve()
+      })
     })
+
+    // ═══════════════════════════════════════════════════════════════
+    // BANNER FINAL
+    // ═══════════════════════════════════════════════════════════════
+    const duration = ((Date.now() - startTime) / 1000).toFixed(1)
+    let finalMessage = `SERVIDOR LISTO | Tiempo de arranque: ${duration}s`
+    if (warnings.length > 0) {
+      finalMessage += ` | ${warnings.length} advertencia(s)`
+    }
+    logger.banner(finalMessage, 'end')
   } catch (error) {
+    logger.fail(`Error fatal: ${error.message}`)
     logger.error('Failed to initialize server:', error)
     process.exit(1)
   }
