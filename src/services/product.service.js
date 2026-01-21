@@ -2,6 +2,7 @@ const { Product, Discount } = require('../models')
 const { Op } = require('sequelize')
 const logger = require('../config/logger')
 const TransactionManager = require('../utils/transactionManager')
+const slugify = require('slugify')
 
 /**
  * Servicio para la gestión de productos
@@ -290,7 +291,7 @@ class ProductService {
         throw new Error(`Referencias duplicadas en el CSV: ${[...new Set(duplicates)].join(', ')}`)
       }
 
-      // 3. Verificar que no existan en la BD
+      // 3. Verificar que productRef no existan en la BD
       const existingProducts = await Product.findAll({
         where: { productRef: uniqueRefs },
         attributes: ['productRef']
@@ -301,7 +302,35 @@ class ProductService {
         throw new Error(`Las siguientes referencias ya existen en la base de datos: ${existingRefs.join(', ')}`)
       }
 
-      // 4. Validar y preparar datos
+      // 4. Generar y validar slugs
+      const slugsToCheck = validRows.map(row => {
+        return slugify(row.name.trim(), { lower: true, strict: true })
+      })
+
+      // Verificar slugs duplicados en el CSV
+      const uniqueSlugs = [...new Set(slugsToCheck)]
+      if (uniqueSlugs.length !== slugsToCheck.length) {
+        const duplicateSlugs = slugsToCheck.filter((slug, index) => slugsToCheck.indexOf(slug) !== index)
+        const uniqueDuplicates = [...new Set(duplicateSlugs)]
+        // Encontrar los nombres que generan slugs duplicados
+        const namesWithDuplicateSlugs = validRows
+          .filter(row => uniqueDuplicates.includes(slugify(row.name.trim(), { lower: true, strict: true })))
+          .map(row => row.name.trim())
+        throw new Error(`Los siguientes nombres generan URLs duplicadas (slug): ${namesWithDuplicateSlugs.join(', ')}. Use nombres más distintivos.`)
+      }
+
+      // Verificar que los slugs no existan en la BD
+      const existingSlugs = await Product.findAll({
+        where: { slug: uniqueSlugs },
+        attributes: ['slug', 'name']
+      })
+
+      if (existingSlugs.length > 0) {
+        const conflictInfo = existingSlugs.map(p => `"${p.name}" (slug: ${p.slug})`)
+        throw new Error(`Ya existen productos con URLs similares. Conflictos: ${conflictInfo.join(', ')}. Cambie los nombres de los productos a importar para evitar duplicados.`)
+      }
+
+      // 5. Validar y preparar datos
       const productsToCreate = validRows.map((row, index) => {
         // Validar price es número
         const price = parseInt(row.price, 10)
@@ -335,8 +364,12 @@ class ProductService {
           }
         }
 
+        // Generar slug manualmente (ya validamos que no existen duplicados)
+        const slug = slugify(row.name.trim(), { lower: true, strict: true })
+
         return {
           name: row.name.trim(),
+          slug,
           productRef: row.productRef.trim(),
           price,
           currency,
@@ -349,13 +382,11 @@ class ProductService {
         }
       })
 
-      // 5. Crear productos en transacción atómica
-      // individualHooks: true es necesario para que se ejecute el hook beforeValidate que genera el slug
+      // 6. Crear productos en transacción atómica
       const createdProducts = await TransactionManager.executeBulkTransaction(async (t) => {
         const products = await Product.bulkCreate(productsToCreate, {
           transaction: t,
-          returning: true,
-          individualHooks: true
+          returning: true
         })
 
         logger.logBusiness('bulkImportProducts.created', {
