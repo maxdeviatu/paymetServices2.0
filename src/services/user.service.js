@@ -278,6 +278,43 @@ class UserService {
       throw error
     }
   }
+
+  /**
+   * Buscar usuario por email o número de documento
+   * @param {Object} params - Parámetros de búsqueda
+   * @param {string} params.email - Email del usuario
+   * @param {string} params.documentNumber - Número de documento del usuario
+   * @returns {Promise<User|null>} Usuario encontrado o null
+   */
+  async findByEmailOrDocument ({ email, documentNumber }) {
+    try {
+      const where = {}
+
+      if (email) {
+        where.email = email.toLowerCase().trim()
+      } else if (documentNumber) {
+        where.document_number = documentNumber.trim()
+      } else {
+        return null
+      }
+
+      const user = await User.findOne({ where })
+
+      logger.logBusiness('findByEmailOrDocument', {
+        searchBy: email ? 'email' : 'documentNumber',
+        found: !!user
+      })
+
+      return user
+    } catch (error) {
+      logger.logError(error, {
+        operation: 'findByEmailOrDocument',
+        email,
+        documentNumber
+      })
+      throw error
+    }
+  }
 }
 
 module.exports = new UserService()

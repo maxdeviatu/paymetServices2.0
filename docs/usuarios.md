@@ -181,6 +181,364 @@ Authorization: Bearer {token}
 }
 ```
 
+---
+
+## Endpoints Administrativos
+
+### Buscar Usuario (Admin)
+
+```http
+GET /users/admin/search
+```
+
+Permite a un administrador buscar un usuario por email o número de documento y obtener toda su información. Útil para verificar los datos antes de realizar una actualización.
+
+**Autenticación:** Token JWT de administrador  
+**Rol requerido:** EDITOR o SUPER_ADMIN
+
+**Headers:**
+```
+Authorization: Bearer {admin_token}
+```
+
+#### Parámetros de Query
+
+| Parámetro | Tipo | Descripción |
+|-----------|------|-------------|
+| `email` | string | Email del usuario a buscar |
+| `documentNumber` | string | Número de documento del usuario |
+
+> **Nota:** Debe proporcionar al menos uno de los dos parámetros.
+
+#### Ejemplo en Postman
+
+**URL (buscar por email):**
+```
+{{base_url}}/api/users/admin/search?email=juan.perez@ejemplo.com
+```
+
+**URL (buscar por documento):**
+```
+{{base_url}}/api/users/admin/search?documentNumber=1234567890
+```
+
+**Método:** `GET`
+
+**Headers:**
+```
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+#### Respuesta Exitosa (200)
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 123,
+    "firstName": "Juan",
+    "lastName": "Pérez García",
+    "email": "juan.perez@ejemplo.com",
+    "phone": "+573001234567",
+    "documentType": "CC",
+    "documentNumber": "1234567890",
+    "birthDate": "1990-05-15",
+    "consentAccepted": true,
+    "createdAt": "2026-01-15T10:30:00.000Z",
+    "updatedAt": "2026-01-22T18:30:00.000Z"
+  }
+}
+```
+
+#### Posibles Errores
+
+**400 - Bad Request (Falta criterio de búsqueda)**
+```json
+{
+  "success": false,
+  "message": "Debe proporcionar un criterio de búsqueda: email o documentNumber"
+}
+```
+
+**401 - Unauthorized (Sin token)**
+```json
+{
+  "success": false,
+  "message": "Acceso no autorizado. Token no proporcionado."
+}
+```
+
+**403 - Forbidden (Rol insuficiente)**
+```json
+{
+  "success": false,
+  "message": "No tiene permisos para realizar esta acción. Se requiere rol: EDITOR"
+}
+```
+
+**404 - Not Found (Usuario no encontrado)**
+```json
+{
+  "success": false,
+  "message": "Usuario no encontrado"
+}
+```
+
+#### Ejemplo con cURL
+
+```bash
+# Buscar por email
+curl -X GET "http://localhost:3000/api/users/admin/search?email=juan@ejemplo.com" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+# Buscar por documento
+curl -X GET "http://localhost:3000/api/users/admin/search?documentNumber=1234567890" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+```
+
+---
+
+### Actualizar Usuario (Admin)
+
+```http
+PATCH /users/admin/update
+```
+
+Permite a un administrador buscar un usuario por email o número de documento y actualizar su información personal. Este endpoint es exclusivo para administradores con rol EDITOR o superior.
+
+**Autenticación:** Token JWT de administrador  
+**Rol requerido:** EDITOR o SUPER_ADMIN
+
+**Headers:**
+```
+Authorization: Bearer {admin_token}
+Content-Type: application/json
+```
+
+#### Estructura del Request
+
+El cuerpo de la petición tiene dos partes:
+- `search`: Criterio de búsqueda (email O documentNumber)
+- `update`: Campos a actualizar
+
+#### Campos de Búsqueda
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `search.email` | string | Email del usuario a buscar |
+| `search.documentNumber` | string | Número de documento del usuario |
+
+> **Nota:** Debe proporcionar al menos uno de los dos campos de búsqueda.
+
+#### Campos Actualizables
+
+| Campo | Tipo | Validación | Descripción |
+|-------|------|------------|-------------|
+| `update.firstName` | string | 2-80 caracteres | Nombre del usuario |
+| `update.lastName` | string | 2-80 caracteres | Apellido del usuario |
+| `update.phone` | string | máx 20 caracteres | Teléfono con indicativo |
+| `update.email` | string | email válido, máx 120 | Correo electrónico |
+| `update.documentType` | string | CC, CE, PASSPORT, PE | Tipo de documento |
+| `update.documentNumber` | string | 1-30 caracteres | Número de documento |
+| `update.birthDate` | string | ISO8601 | Fecha de nacimiento |
+
+#### Ejemplo en Postman
+
+**URL:** `{{base_url}}/api/users/admin/update`  
+**Método:** `PATCH`
+
+**Headers:**
+```
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+Content-Type: application/json
+```
+
+**Body (Buscar por email):**
+```json
+{
+  "search": {
+    "email": "juan.perez@ejemplo.com"
+  },
+  "update": {
+    "firstName": "Juan Carlos",
+    "lastName": "Pérez García",
+    "phone": "+573001234567"
+  }
+}
+```
+
+**Body (Buscar por documento):**
+```json
+{
+  "search": {
+    "documentNumber": "1234567890"
+  },
+  "update": {
+    "email": "nuevo.correo@ejemplo.com",
+    "birthDate": "1990-05-15"
+  }
+}
+```
+
+**Body (Actualización completa):**
+```json
+{
+  "search": {
+    "email": "usuario@ejemplo.com"
+  },
+  "update": {
+    "firstName": "María",
+    "lastName": "González López",
+    "phone": "+573109876543",
+    "email": "maria.gonzalez@ejemplo.com",
+    "documentType": "CC",
+    "documentNumber": "9876543210",
+    "birthDate": "1985-12-20"
+  }
+}
+```
+
+#### Respuesta Exitosa (200)
+
+```json
+{
+  "success": true,
+  "message": "Usuario actualizado exitosamente",
+  "data": {
+    "id": 123,
+    "firstName": "Juan Carlos",
+    "lastName": "Pérez García",
+    "email": "juan.perez@ejemplo.com",
+    "phone": "+573001234567",
+    "documentType": "CC",
+    "documentNumber": "1234567890",
+    "birthDate": "1990-05-15",
+    "updatedAt": "2026-01-22T18:30:00.000Z"
+  }
+}
+```
+
+#### Posibles Errores
+
+**400 - Bad Request (Falta criterio de búsqueda)**
+```json
+{
+  "success": false,
+  "message": "Debe proporcionar un criterio de búsqueda: email o documentNumber"
+}
+```
+
+**400 - Bad Request (Faltan datos para actualizar)**
+```json
+{
+  "success": false,
+  "message": "Debe proporcionar al menos un campo para actualizar"
+}
+```
+
+**400 - Bad Request (Validación fallida)**
+```json
+{
+  "success": false,
+  "message": "Validation failed",
+  "errors": [
+    {
+      "field": "update.firstName",
+      "message": "El nombre debe tener entre 2 y 80 caracteres"
+    }
+  ]
+}
+```
+
+**400 - Bad Request (Email duplicado)**
+```json
+{
+  "success": false,
+  "message": "Ya existe un usuario con el email nuevo.correo@ejemplo.com"
+}
+```
+
+**400 - Bad Request (Documento duplicado)**
+```json
+{
+  "success": false,
+  "message": "Ya existe un usuario con el documento CC 9876543210"
+}
+```
+
+**400 - Bad Request (Tipo de documento inválido)**
+```json
+{
+  "success": false,
+  "message": "Tipo de documento inválido. Debe ser uno de: CC, CE, PASSPORT, PE"
+}
+```
+
+**401 - Unauthorized (Sin token)**
+```json
+{
+  "success": false,
+  "message": "Acceso no autorizado. Token no proporcionado."
+}
+```
+
+**401 - Unauthorized (Token inválido)**
+```json
+{
+  "success": false,
+  "message": "Acceso no autorizado. Token inválido."
+}
+```
+
+**403 - Forbidden (Rol insuficiente)**
+```json
+{
+  "success": false,
+  "message": "No tiene permisos para realizar esta acción. Se requiere rol: EDITOR"
+}
+```
+
+**404 - Not Found (Usuario no encontrado)**
+```json
+{
+  "success": false,
+  "message": "Usuario no encontrado"
+}
+```
+
+#### Ejemplo con cURL
+
+```bash
+# Buscar por email y actualizar nombre
+curl -X PATCH http://localhost:3000/api/users/admin/update \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "search": {
+      "email": "juan@ejemplo.com"
+    },
+    "update": {
+      "firstName": "Juan Carlos",
+      "lastName": "Pérez Modificado"
+    }
+  }'
+
+# Buscar por documento y cambiar email
+curl -X PATCH http://localhost:3000/api/users/admin/update \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "search": {
+      "documentNumber": "1234567890"
+    },
+    "update": {
+      "email": "nuevo.correo@ejemplo.com"
+    }
+  }'
+```
+
+---
+
 ## Validaciones
 
 ### Registro de Usuario

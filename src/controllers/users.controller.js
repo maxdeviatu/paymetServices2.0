@@ -300,6 +300,178 @@ class UsersController {
       })
     }
   }
+
+  /**
+   * Actualizar datos de un usuario (uso administrativo)
+   * Busca por email o documento y actualiza los datos proporcionados
+   * @param {Object} req - Request object
+   * @param {Object} res - Response object
+   */
+  async adminUpdateUser (req, res) {
+    try {
+      const { search, update } = req.body
+      const adminId = req.user?.id
+
+      // Validar que se proporcionó criterio de búsqueda
+      if (!search || (!search.email && !search.documentNumber)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Debe proporcionar un criterio de búsqueda: email o documentNumber'
+        })
+      }
+
+      // Validar que se proporcionaron datos para actualizar
+      if (!update || Object.keys(update).length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Debe proporcionar al menos un campo para actualizar'
+        })
+      }
+
+      // Buscar el usuario
+      const user = await userService.findByEmailOrDocument({
+        email: search.email,
+        documentNumber: search.documentNumber
+      })
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'Usuario no encontrado'
+        })
+      }
+
+      // Preparar datos para actualizar
+      const updateData = {}
+      const {
+        firstName,
+        lastName,
+        phone,
+        email,
+        documentType,
+        documentNumber,
+        birthDate
+      } = update
+
+      if (firstName !== undefined) updateData.first_name = firstName.trim()
+      if (lastName !== undefined) updateData.last_name = lastName.trim()
+      if (phone !== undefined) updateData.phone = phone?.trim() || null
+      if (email !== undefined) updateData.email = email.toLowerCase().trim()
+      if (documentType !== undefined) {
+        if (!DOCUMENT_TYPES.includes(documentType)) {
+          return res.status(400).json({
+            success: false,
+            message: `Tipo de documento inválido. Debe ser uno de: ${DOCUMENT_TYPES.join(', ')}`
+          })
+        }
+        updateData.document_type = documentType
+      }
+      if (documentNumber !== undefined) updateData.document_number = documentNumber.trim()
+      if (birthDate !== undefined) updateData.birth_date = birthDate || null
+
+      // Actualizar usuario
+      const updatedUser = await userService.updateUser(user.id, updateData)
+
+      logger.logBusiness('adminUpdateUser.success', {
+        adminId,
+        userId: user.id,
+        searchBy: search.email ? 'email' : 'documentNumber',
+        fieldsUpdated: Object.keys(updateData)
+      })
+
+      res.status(200).json({
+        success: true,
+        message: 'Usuario actualizado exitosamente',
+        data: {
+          id: updatedUser.id,
+          firstName: updatedUser.first_name,
+          lastName: updatedUser.last_name,
+          email: updatedUser.email,
+          phone: updatedUser.phone,
+          documentType: updatedUser.document_type,
+          documentNumber: updatedUser.document_number,
+          birthDate: updatedUser.birth_date,
+          updatedAt: updatedUser.updatedAt
+        }
+      })
+    } catch (error) {
+      logger.logError(error, {
+        operation: 'adminUpdateUser',
+        adminId: req.user?.id
+      })
+
+      res.status(400).json({
+        success: false,
+        message: error.message
+      })
+    }
+  }
+
+  /**
+   * Buscar un usuario por email o documento (uso administrativo)
+   * @param {Object} req - Request object
+   * @param {Object} res - Response object
+   */
+  async adminSearchUser (req, res) {
+    try {
+      const { email, documentNumber } = req.query
+      const adminId = req.user?.id
+
+      // Validar que se proporcionó al menos un criterio de búsqueda
+      if (!email && !documentNumber) {
+        return res.status(400).json({
+          success: false,
+          message: 'Debe proporcionar un criterio de búsqueda: email o documentNumber'
+        })
+      }
+
+      // Buscar el usuario
+      const user = await userService.findByEmailOrDocument({
+        email,
+        documentNumber
+      })
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'Usuario no encontrado'
+        })
+      }
+
+      logger.logBusiness('adminSearchUser.success', {
+        adminId,
+        userId: user.id,
+        searchBy: email ? 'email' : 'documentNumber'
+      })
+
+      res.status(200).json({
+        success: true,
+        data: {
+          id: user.id,
+          firstName: user.first_name,
+          lastName: user.last_name,
+          email: user.email,
+          phone: user.phone,
+          documentType: user.document_type,
+          documentNumber: user.document_number,
+          birthDate: user.birth_date,
+          consentAccepted: user.consent_accepted,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt
+        }
+      })
+    } catch (error) {
+      logger.logError(error, {
+        operation: 'adminSearchUser',
+        adminId: req.user?.id
+      })
+
+      res.status(500).json({
+        success: false,
+        message: 'Error interno del servidor'
+      })
+    }
+  }
 }
 
 module.exports = new UsersController()
