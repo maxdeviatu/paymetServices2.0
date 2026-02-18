@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test ePayco Checkout</title>
+  <script src="https://checkout.epayco.co/checkout.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; padding: 2rem; }
+    .container { max-width: 480px; margin: 0 auto; background: #fff; border-radius: 12px; padding: 2rem; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+    h1 { font-size: 1.3rem; margin-bottom: 1.5rem; color: #333; }
+    label { display: block; font-size: 0.85rem; font-weight: 600; color: #555; margin-bottom: 4px; }
+    input, select { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.95rem; margin-bottom: 1rem; }
+    input:focus, select:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,0.1); }
+    button { width: 100%; padding: 12px; background: #4f46e5; color: #fff; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; }
+    button:hover { background: #4338ca; }
+    button:disabled { background: #a5a3d9; cursor: not-allowed; }
+    .log { margin-top: 1.5rem; background: #1e1e2e; color: #a6e3a1; border-radius: 8px; padding: 1rem; font-family: monospace; font-size: 0.8rem; max-height: 300px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
+    .log-error { color: #f38ba8; }
+    .log-info { color: #89b4fa; }
+    .row { display: flex; gap: 1rem; }
+    .row > div { flex: 1; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Test ePayco Checkout - Local</h1>
+
+    <label>Producto (productRef)</label>
+    <select id="productRef">
+      <option value="TEST-001">TEST-001 - Producto de Prueba ($10,000 COP)</option>
+      <option value="9780137379750">9780137379750 - StartUp Inglés Nivel 5 ($88,000 COP)</option>
+    </select>
+
+    <div class="row">
+      <div>
+        <label>Nombre</label>
+        <input id="firstName" value="Armando">
+      </div>
+      <div>
+        <label>Apellido</label>
+        <input id="lastName" value="Avendano">
+      </div>
+    </div>
+
+    <label>Email</label>
+    <input id="email" type="email" value="test-epayco@test.com">
+
+    <div class="row">
+      <div>
+        <label>Tipo Doc</label>
+        <select id="documentType">
+          <option value="CC">CC</option>
+          <option value="CE">CE</option>
+          <option value="NIT">NIT</option>
+          <option value="TI">TI</option>
+          <option value="PP">PP (Pasaporte)</option>
+        </select>
+      </div>
+      <div>
+        <label>Número Doc</label>
+        <input id="documentNumber" value="123456789">
+      </div>
+    </div>
+
+    <label>Teléfono</label>
+    <input id="phone" value="+573001234567">
+
+    <button id="payBtn" onclick="createOrder()">Crear orden y abrir ePayco</button>
+
+    <div class="log" id="log"></div>
+  </div>
+
+  <script>
+    const API_URL = 'http://localhost:3001/api/orders';
+    const logEl = document.getElementById('log');
+    const payBtn = document.getElementById('payBtn');
+
+    function log(msg, type = '') {
+      const line = document.createElement('span');
+      line.className = type ? `log-${type}` : '';
+      line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}\n`;
+      logEl.appendChild(line);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    async function createOrder() {
+      payBtn.disabled = true;
+      payBtn.textContent = 'Espere...';
+      logEl.innerHTML = '';
+
+      const payload = {
+        productRef: document.getElementById('productRef').value,
+        qty: 1,
+        provider: 'epayco',
+        customer: {
+          firstName: document.getElementById('firstName').value,
+          lastName: document.getElementById('lastName').value,
+          email: document.getElementById('email').value,
+          documentType: document.getElementById('documentType').value,
+          documentNumber: document.getElementById('documentNumber').value,
+          phone: document.getElementById('phone').value,
+          birthDate: '1990-01-01'
+        }
+      };
+
+      log('POST ' + API_URL, 'info');
+      log('Payload: ' + JSON.stringify(payload, null, 2));
+
+      try {
+        const res = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          log('ERROR ' + res.status + ': ' + (data.message || JSON.stringify(data)), 'error');
+          if (data.errors) {
+            data.errors.forEach(e => log(`  → ${e.field}: ${e.message}`, 'error'));
+          }
+          payBtn.disabled = false;
+          payBtn.textContent = 'Crear orden y abrir ePayco';
+          return;
+        }
+
+        log('Orden creada: #' + data.data.order.id, 'info');
+        log('Transacción: #' + data.data.transaction.id);
+        log('GatewayRef: ' + data.data.transaction.gatewayRef);
+        log('Total: $' + data.data.order.grandTotal + ' ' + data.data.order.currency);
+
+        if (data.data.epayco) {
+          const ep = data.data.epayco;
+          log('ePayco publicKey: ' + ep.publicKey.substring(0, 12) + '...', 'info');
+          log('ePayco test: ' + ep.test);
+          log('Invoice: ' + ep.checkoutData.invoice);
+          log('Amount (pesos): $' + ep.checkoutData.amount);
+          log('methodsDisable: ' + JSON.stringify(ep.checkoutData.methodsDisable));
+          log('Abriendo checkout...', 'info');
+
+          const handler = ePayco.checkout.configure({
+            key: ep.publicKey,
+            test: ep.test
+          });
+          handler.open(ep.checkoutData);
+        } else {
+          log('Sin datos de ePayco en la respuesta', 'error');
+          log('Response completa: ' + JSON.stringify(data, null, 2), 'error');
+        }
+
+      } catch (err) {
+        log('Error de red: ' + err.message, 'error');
+      }
+
+      payBtn.disabled = false;
+      payBtn.textContent = 'Crear orden y abrir ePayco';
+    }
+  </script>
+</body>
+</html>
