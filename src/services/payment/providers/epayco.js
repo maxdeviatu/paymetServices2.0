@@ -121,8 +121,12 @@ class EPaycoProvider {
       response: this.responseUrl,
       confirmation: this.confirmationUrl,
 
-      // Disable unwanted payment methods (keep only credit cards and PSE)
-      methodsDisable: ['PSE', 'SP', 'CASH', 'DP', 'ATH']
+      // Disable all payment methods except TDC (tarjetas de crédito)
+      // Valid values: TDC, ACH, CAH, CASH, WLL, PCO, CAPD, CRYP, MI, PDD, TDCN,
+      //   3DSVS, 3DSMC, OCP, PSE, BBC, CCO, FMF, PP, SP, MPD, DP, 3DS, CTP, MPM, RRF, APP
+      methodsDisable: ['ACH', 'CAH', 'CASH', 'WLL', 'PCO', 'CAPD', 'CRYP', 'MI', 'PDD',
+        'TDCN', '3DSVS', '3DSMC', 'OCP', 'PSE', 'BBC', 'CCO', 'FMF', 'PP', 'SP',
+        'MPD', 'DP', '3DS', 'CTP', 'MPM', 'RRF', 'APP']
     }
   }
 
