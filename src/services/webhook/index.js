@@ -1,4 +1,5 @@
 const { WebhookEvent, sequelize } = require('../../models')
+const { UniqueConstraintError } = require('sequelize')
 const logger = require('../../config/logger')
 
 // Importar adaptadores de proveedores
@@ -339,20 +340,39 @@ class WebhookService {
     // Validar y sanitizar datos antes de guardar
     const sanitizedEvent = this.sanitizeWebhookEvent(webhookEvent)
 
-    return await WebhookEvent.create({
-      eventId: sanitizedEvent.eventId,
-      provider: sanitizedEvent.provider,
-      externalRef: sanitizedEvent.externalRef,
-      eventType: sanitizedEvent.type,
-      status: sanitizedEvent.status,
-      amount: sanitizedEvent.amount,
-      currency: sanitizedEvent.currency,
-      payload: sanitizedEvent.payload,
-      rawHeaders: sanitizedEvent.rawHeaders,
-      rawBody: sanitizedEvent.rawBody,
-      errorMessage: sanitizedEvent.errorMessage,
-      eventIndex: sanitizedEvent.eventIndex
-    })
+    try {
+      return await WebhookEvent.create({
+        eventId: sanitizedEvent.eventId,
+        provider: sanitizedEvent.provider,
+        externalRef: sanitizedEvent.externalRef,
+        eventType: sanitizedEvent.type,
+        status: sanitizedEvent.status,
+        amount: sanitizedEvent.amount,
+        currency: sanitizedEvent.currency,
+        payload: sanitizedEvent.payload,
+        rawHeaders: sanitizedEvent.rawHeaders,
+        rawBody: sanitizedEvent.rawBody,
+        errorMessage: sanitizedEvent.errorMessage,
+        eventIndex: sanitizedEvent.eventIndex
+      })
+    } catch (error) {
+      if (error instanceof UniqueConstraintError) {
+        logger.warn('WebhookService: Duplicate webhook event detected via unique constraint', {
+          eventId: sanitizedEvent.eventId,
+          provider: sanitizedEvent.provider,
+          externalRef: sanitizedEvent.externalRef
+        })
+        // Retornar el evento existente en lugar de fallar
+        const existing = await WebhookEvent.findOne({
+          where: {
+            eventId: sanitizedEvent.eventId,
+            provider: sanitizedEvent.provider
+          }
+        })
+        if (existing) return existing
+      }
+      throw error
+    }
   }
 
   /**
@@ -362,7 +382,7 @@ class WebhookService {
    */
   sanitizeWebhookEvent (webhookEvent) {
     const sanitized = {
-      eventId: this.sanitizeString(webhookEvent.eventId) || 'unknown',
+      eventId: this.sanitizeString(webhookEvent.eventId) || null,
       provider: this.sanitizeString(webhookEvent.provider) || 'unknown',
       externalRef: this.sanitizeString(webhookEvent.externalRef) || 'unknown',
       type: this.sanitizeString(webhookEvent.type) || 'unknown',
