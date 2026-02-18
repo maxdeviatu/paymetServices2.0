@@ -40,7 +40,7 @@ class EPaycoAdapter {
 
       // ePayco siempre envía un solo evento por webhook
       const event = {
-        eventId: body.x_transaction_id || `epayco_${Date.now()}`,
+        eventId: (body.x_transaction_id && body.x_transaction_id !== '000000') ? body.x_transaction_id : null,
         externalRef: body.x_id_factura, // Invoice ID como referencia externa
         type: 'payment',
         status: this.mapStatus(body.x_cod_transaction_state),
