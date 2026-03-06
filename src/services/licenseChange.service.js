@@ -112,9 +112,9 @@ class LicenseChangeService {
       throw new Error('Formato de licenseKey inválido')
     }
 
-    // Validate document number format (Colombian formats)
-    if (!/^[0-9]{8,12}$/.test(customerDocumentNumber)) {
-      throw new Error('El número de documento debe ser numérico con 8-12 dígitos')
+    // Validate document number format (flexible - supports CC, CE, passport, etc.)
+    if (!/^[a-zA-Z0-9]{1,30}$/.test(customerDocumentNumber)) {
+      throw new Error('El número de documento debe tener entre 1 y 30 caracteres alfanuméricos')
     }
 
     // Validate product reference format

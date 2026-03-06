@@ -341,8 +341,8 @@ describe('LicenseChangeService', () => {
 
     it('should throw error if customerDocumentNumber has invalid format', () => {
       expect(() => {
-        licenseChangeService.validateInput('AAA-BBB-CCC-111', '12345678!', 'SOFT-PRO-2Y')
-      }).toThrow('El número de documento debe ser numérico con 8-12 dígitos')
+        licenseChangeService.validateInput('AAA-BBB-CCC-111', '12345678!@#', 'SOFT-PRO-2Y')
+      }).toThrow('El número de documento debe tener entre 1 y 30 caracteres alfanuméricos')
     })
 
     it('should throw error if newProductRef has invalid format', () => {
